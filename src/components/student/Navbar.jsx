@@ -1,12 +1,15 @@
+/* eslint-disable no-unused-vars */
 import React, { useState } from "react";
 import { assets } from "./../../assets/assets";
 import { Link, useLocation } from "react-router-dom";
 import { FiMenu, FiX } from "react-icons/fi";
-import { FaUser } from "react-icons/fa";
+import { useClerk, useUser, UserButton } from "@clerk/clerk-react";
 
 const Navbar = () => {
   const location = useLocation();
   const isCourseListPage = location.pathname.includes("/course-list");
+  const { openSignIn } = useClerk();
+  const { user } = useUser();
   const [menuOpen, setMenuOpen] = useState(false);
 
   return (
@@ -35,9 +38,16 @@ const Navbar = () => {
           >
             My Enrollments
           </Link>
-          <button className="bg-blue-600 text-white px-5 py-2 rounded-full">
-            Create Account
-          </button>
+          {user ? (
+            <UserButton afterSignOutUrl="/" />
+          ) : (
+            <button
+              onClick={openSignIn}
+              className="bg-blue-600 text-white px-5 py-2 rounded-full"
+            >
+              Create Account
+            </button>
+          )}
         </div>
 
         {/* Mobile Hamburger */}
@@ -66,20 +76,21 @@ const Navbar = () => {
             My Enrollments
           </Link>
 
-          <button
-            className="bg-blue-600 text-white px-4 py-2 rounded-full w-full text-left flex justify-center"
-            onClick={() => setMenuOpen(false)}
-          >
-            Create Account
-          </button>
-
-          <button
-            className="flex items-center justify-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-full w-full"
-            onClick={() => setMenuOpen(false)}
-          >
-            <FaUser size={16} />
-            Profile
-          </button>
+          {user ? (
+            <div className="flex justify-center">
+              <UserButton afterSignOutUrl="/" />
+            </div>
+          ) : (
+            <button
+              className="bg-blue-600 text-white px-4 py-2 rounded-full w-full text-left flex justify-center"
+              onClick={() => {
+                openSignIn();
+                setMenuOpen(false);
+              }}
+            >
+              Create Account
+            </button>
+          )}
         </div>
       )}
     </div>
