@@ -15,29 +15,35 @@ import MyCourses from "./pages/educator/MyCourses";
 import StudentsEnrolled from "./pages/educator/StudentsEnrolled";
 import Navbar from "./components/student/Navbar.jsx";
 
+import { AppContextProvider } from "./context/AppContextProvider"; // <--- Import provider
+
 const App = () => {
   const isEducatorRoute = useMatch("/educator/*");
   return (
-    <div className="text-default min-h-screen bg-white">
-      {!isEducatorRoute && <Navbar />}
+    <AppContextProvider>
+      {" "}
+      {/* <-- Wrap here */}
+      <div className="text-default min-h-screen bg-white">
+        {!isEducatorRoute && <Navbar />}
 
-      <Routes>
-        <Route path="/" element={<Home />} />
-        <Route path="/course-list" element={<CoursesList />} />
-        <Route path="/course-list/:input" element={<CoursesList />} />
-        <Route path="/my-enrollments" element={<MyEnrollments />} />
-        <Route path="/course/:id" element={<CourseDetails />} />
-        <Route path="/player/:courseId" element={<Player />} />
-        <Route path="/loading/:path" element={<Loading />} />
+        <Routes>
+          <Route path="/" element={<Home />} />
+          <Route path="/course-list" element={<CoursesList />} />
+          <Route path="/course-list/:input" element={<CoursesList />} />
+          <Route path="/my-enrollments" element={<MyEnrollments />} />
+          <Route path="/course/:id" element={<CourseDetails />} />
+          <Route path="/player/:courseId" element={<Player />} />
+          <Route path="/loading/:path" element={<Loading />} />
 
-        <Route path="/educator" element={<Educator />}>
-          <Route path="educator " element={<Dashboard />} />
-          <Route path="add-course" element={<AddCourse />} />
-          <Route path="my-courses" element={<MyCourses />} />
-          <Route path="student-enrolled" element={<StudentsEnrolled />} />
-        </Route>
-      </Routes>
-    </div>
+          <Route path="/educator" element={<Educator />}>
+            <Route path="educator " element={<Dashboard />} />
+            <Route path="add-course" element={<AddCourse />} />
+            <Route path="my-courses" element={<MyCourses />} />
+            <Route path="student-enrolled" element={<StudentsEnrolled />} />
+          </Route>
+        </Routes>
+      </div>
+    </AppContextProvider>
   );
 };
 

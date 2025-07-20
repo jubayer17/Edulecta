@@ -15,7 +15,7 @@ const Navbar = () => {
   return (
     <div
       className={`px-4 sm:px-6 md:px-10 lg:px-36 border-b border-gray-300 py-3 ${
-        isCourseListPage ? "bg-white" : "bg-green-100/80"
+        isCourseListPage ? "bg-white" : "bg-green-200/80"
       }`}
     >
       <div className="flex items-center justify-between">
