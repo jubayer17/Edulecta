@@ -20,7 +20,7 @@ const CoursesSection = () => {
       </p>
 
       {/* Grid for 4 cards */}
-      <div className="md:w-[1100px] grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mt-10 w-full max-w-[2200px]">
+      <div className="md:w-[1100px] grid grid-cols-auto sm:grid-cols-2 lg:grid-cols-4 gap-6 mt-10 w-full max-w-[2200px]">
         {allCourses.slice(0, 4).map((course, index) => (
           <CourseCard key={index} course={course} assets={assets} />
         ))}

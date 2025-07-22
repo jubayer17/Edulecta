@@ -31,3 +31,7 @@
 .animate-marquee {
   animation: marquee 20s linear infinite;
 }
+.auto {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+}

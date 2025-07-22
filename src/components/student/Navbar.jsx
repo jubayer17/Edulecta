@@ -1,9 +1,11 @@
 /* eslint-disable no-unused-vars */
-import React, { useState } from "react";
+import React, { useContext, useState } from "react";
 import { assets } from "./../../assets/assets";
 import { Link, useLocation } from "react-router-dom";
 import { FiMenu, FiX } from "react-icons/fi";
 import { useClerk, useUser, UserButton } from "@clerk/clerk-react";
+import { AppContext } from "../../context/AppContext";
+import { AppContextProvider } from "../../context/AppContextProvider";
 
 const Navbar = () => {
   const location = useLocation();
@@ -11,6 +13,7 @@ const Navbar = () => {
   const { openSignIn } = useClerk();
   const { user } = useUser();
   const [menuOpen, setMenuOpen] = useState(false);
+  const { navigate, isEducator } = useContext(AppContext);
 
   return (
     <div
@@ -21,6 +24,7 @@ const Navbar = () => {
       <div className="flex items-center justify-between">
         <Link to="/">
           <img
+            onClick={() => navigate("/")}
             src={assets.edulecta}
             alt="Edulecta Logo"
             className="w-24 sm:w-28 md:w-32 cursor-pointer"
@@ -30,7 +34,7 @@ const Navbar = () => {
         {/* Desktop Links */}
         <div className="hidden md:flex items-center gap-6 text-gray-600 text-sm sm:text-base">
           <Link to="/educator" className="hover:text-blue-600 font-medium">
-            Become Educator
+            {isEducator ? "Educator Dashboard" : "Become Educator"}
           </Link>
           <Link
             to="/my-enrollments"
@@ -66,7 +70,7 @@ const Navbar = () => {
             className="hover:text-blue-600 font-medium px-2"
             onClick={() => setMenuOpen(false)}
           >
-            Become Educator
+            {isEducator ? "Educator Dashboard" : "Become Educator"}
           </Link>
           <Link
             to="/my-enrollments"
