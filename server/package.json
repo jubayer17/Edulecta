@@ -5,6 +5,7 @@
   "main": "server.js",
   "type": "module",
   "scripts": {
+    "build": "echo 'Build complete'",
     "server": "nodemon server.js",
     "start": "node server.js"
   },
