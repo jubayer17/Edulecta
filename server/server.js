@@ -78,11 +78,13 @@ const initializeApp = async () => {
 // For local development only
 if (process.env.NODE_ENV !== "production") {
   const PORT = process.env.PORT || 3000;
-  
+
   initializeApp().then(() => {
     app.listen(PORT, () => {
       console.log(`Server is running on port ${PORT}`);
-      console.log(`Webhook endpoint available at: http://localhost:${PORT}/clerk`);
+      console.log(
+        `Webhook endpoint available at: http://localhost:${PORT}/clerk`
+      );
     });
   });
 } else {
