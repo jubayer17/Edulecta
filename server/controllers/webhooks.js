@@ -19,7 +19,7 @@ export const handleClerkWebhook = async (req, res) => {
           _id: data.id,
           username:
             data.username || (data.first_name + " " + data.last_name).trim(),
-          email: data.email_addresses[0].email_address,
+          email: data.email_addresses?.[0]?.email_address,
           password: "clerk_managed", // Clerk manages authentication
           imageUrl:
             data.image_url ||
@@ -37,7 +37,7 @@ export const handleClerkWebhook = async (req, res) => {
         const updateData = {
           username:
             data.username || (data.first_name + " " + data.last_name).trim(),
-          email: data.email_addresses[0].email_address,
+          email: data.email_addresses?.[0]?.email_address,
           imageUrl:
             data.image_url ||
             data.profile_image_url ||
