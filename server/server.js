@@ -9,14 +9,13 @@ dotenv.config();
 const app = express();
 app.use(cors());
 
-// Raw body parser for Clerk webhook
+// Clerk webhook route - uses raw body parser
 app.post(
   "/clerk",
   express.raw({ type: "application/json" }),
   async (req, res) => {
     try {
-      const body = JSON.parse(req.body.toString());
-      req.body = body;
+      req.body = JSON.parse(req.body.toString("utf8"));
       return handleClerkWebhook(req, res);
     } catch (error) {
       console.error("Error parsing webhook body:", error);
@@ -25,7 +24,7 @@ app.post(
   }
 );
 
-// JSON parser for everything else
+// JSON parser for all other routes
 app.use(express.json());
 
 app.get("/", (req, res) => {
@@ -58,7 +57,7 @@ app.post("/test-user", async (req, res) => {
   }
 });
 
-// Always connect to MongoDB (whether local or Vercel)
+// MongoDB connection
 await connectDB();
 
 export default app;
