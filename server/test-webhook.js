@@ -1,37 +1,39 @@
-import fetch from "node-fetch";
+import dotenv from "dotenv";
+
+// Load environment variables
+dotenv.config();
 
 const testWebhook = async () => {
-  const webhookData = {
-    type: "user.created",
-    data: {
-      id: "test_user_123",
-      username: "testuser",
-      first_name: "Test",
-      last_name: "User",
-      email_addresses: [
-        {
-          email_address: "test@example.com",
-        },
-      ],
-      image_url: "https://via.placeholder.com/150",
-      created_at: new Date().toISOString(),
-    },
-  };
+  const webhookUrl =
+    "https://server-qe1gid3gp-jubayer-ahmeds-projects-62133443.vercel.app/clerk";
+
+  console.log("🧪 Testing webhook endpoint...");
+  console.log("📡 URL:", webhookUrl);
 
   try {
-    const response = await fetch("http://localhost:3000/clerk", {
+    const response = await fetch(webhookUrl, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        "svix-id": "msg_test_" + Date.now(),
+        "svix-timestamp": Math.floor(Date.now() / 1000).toString(),
+        "svix-signature": "v1,test_signature",
       },
-      body: JSON.stringify(webhookData),
+      body: JSON.stringify({
+        data: {
+          id: "test_user_" + Date.now(),
+          username: "testuser",
+          email_addresses: [{ email_address: "test@example.com" }],
+        },
+        type: "user.created",
+      }),
     });
 
-    const result = await response.text();
-    console.log("Response status:", response.status);
-    console.log("Response:", result);
+    console.log("Status:", response.status);
+    const text = await response.text();
+    console.log("Response:", text);
   } catch (error) {
-    console.error("Error testing webhook:", error);
+    console.error("Error:", error.message);
   }
 };
 

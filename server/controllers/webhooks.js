@@ -65,6 +65,15 @@ export const handleClerkWebhook = async (req, res) => {
     switch (type) {
       case "user.created": {
         try {
+          console.log("🔍 Raw Clerk user data:", JSON.stringify(data, null, 2));
+
+          // Check if user already exists
+          const existingUser = await User.findById(data.id);
+          if (existingUser) {
+            console.log("⚠️ User already exists, skipping creation:", data.id);
+            return res.status(200).json({ message: "User already exists" });
+          }
+
           const userData = {
             _id: data.id,
             username:
@@ -79,12 +88,33 @@ export const handleClerkWebhook = async (req, res) => {
             createdAt: data.created_at ? new Date(data.created_at) : new Date(),
             timestamp: new Date(),
           };
+
+          console.log(
+            "📝 Creating user with data:",
+            JSON.stringify(userData, null, 2)
+          );
           await User.create(userData);
           console.log("✅ User created:", userData._id);
           return res.status(200).json({ message: "User created successfully" });
         } catch (err) {
-          console.error("❌ Failed to create user:", err.message);
-          return res.status(500).json({ error: "Database create error" });
+          console.error("❌ Detailed create error:", {
+            message: err.message,
+            code: err.code,
+            name: err.name,
+          });
+
+          // Handle duplicate key error
+          if (err.code === 11000) {
+            console.log("🔄 Duplicate key error, user might already exist");
+            return res
+              .status(200)
+              .json({ message: "User already exists (duplicate key)" });
+          }
+
+          return res.status(500).json({
+            error: "Database create error",
+            details: err.message,
+          });
         }
       }
 
@@ -111,12 +141,48 @@ export const handleClerkWebhook = async (req, res) => {
 
       case "user.deleted": {
         try {
-          await User.findByIdAndDelete(data.id);
-          console.log("✅ User deleted:", data.id);
+          console.log("🗑️ Attempting to delete user:", data.id);
+
+          // Check if user exists before deletion
+          const existingUser = await User.findById(data.id);
+          if (!existingUser) {
+            console.log(
+              "⚠️ User not found in database, already deleted or never existed:",
+              data.id
+            );
+            return res
+              .status(200)
+              .json({ message: "User not found (already deleted)" });
+          }
+
+          // Delete the user
+          const deletedUser = await User.findByIdAndDelete(data.id);
+
+          if (deletedUser) {
+            console.log("✅ User successfully deleted from MongoDB:", data.id);
+            console.log("📊 Deleted user details:", {
+              id: deletedUser._id,
+              username: deletedUser.username,
+              email: deletedUser.email,
+            });
+          } else {
+            console.log(
+              "⚠️ User deletion returned null, might not have existed:",
+              data.id
+            );
+          }
+
           return res.status(200).json({ message: "User deleted successfully" });
         } catch (err) {
-          console.error("❌ Failed to delete user:", err.message);
-          return res.status(500).json({ error: "Database delete error" });
+          console.error("❌ Failed to delete user:", {
+            message: err.message,
+            code: err.code,
+            userId: data.id,
+          });
+          return res.status(500).json({
+            error: "Database delete error",
+            details: err.message,
+          });
         }
       }
 
