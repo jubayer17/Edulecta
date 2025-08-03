@@ -4,7 +4,6 @@ import dotenv from "dotenv";
 import path from "path";
 import { fileURLToPath } from "url";
 import connectDB from "./configs/mongodb.js";
-import { rawBodyMiddleware } from "./middlewares/rawBodyMiddleware.js";
 import { handleClerkWebhook } from "./controllers/webhooks.js";
 
 // Get current directory for ES modules
@@ -19,8 +18,8 @@ const PORT = process.env.PORT || 3000;
 
 app.use(cors());
 
-// Use rawBodyMiddleware before any JSON parsing and before webhook route
-app.use(rawBodyMiddleware);
+// Parse raw body for webhook signature verification
+app.use("/clerk", express.raw({ type: "application/json" }));
 
 // Use express.json() for all other routes
 app.use(express.json());
@@ -28,10 +27,12 @@ app.use(express.json());
 // Clerk webhook endpoint
 app.post("/clerk", (req, res) => {
   try {
-    // req.rawBody set by rawBodyMiddleware
-    if (!req.rawBody) throw new Error("Missing raw body");
+    // Convert buffer to string for signature verification
+    req.rawBody = req.body.toString("utf8");
 
+    // Parse JSON for webhook handler
     req.body = JSON.parse(req.rawBody);
+
     return handleClerkWebhook(req, res);
   } catch (error) {
     console.error("Error parsing webhook body:", error);

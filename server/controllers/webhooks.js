@@ -4,6 +4,14 @@ import connectDB from "../configs/mongodb.js";
 
 export const handleClerkWebhook = async (req, res) => {
   try {
+    console.log("🎯 Webhook received - Environment check:");
+    console.log("- MONGODB_URI exists:", !!process.env.MONGODB_URI);
+    console.log(
+      "- CLERK_WEBHOOK_SECRET exists:",
+      !!process.env.CLERK_WEBHOOK_SECRET
+    );
+    console.log("- Headers received:", req.headers);
+
     if (req.query?.test === "1") {
       console.log("✅ Clerk webhook test endpoint hit");
       return res.status(200).json({ message: "Clerk webhook test successful" });

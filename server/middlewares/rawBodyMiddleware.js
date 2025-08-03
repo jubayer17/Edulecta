@@ -14,6 +14,11 @@ export const rawBodyMiddleware = (req, res, next) => {
       req.rawBody = rawBody;
       next();
     });
+
+    req.on("error", (err) => {
+      console.error("Error reading request body:", err);
+      next(err);
+    });
   } else {
     next();
   }
