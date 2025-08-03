@@ -35,7 +35,10 @@ app.get("/", (req, res) => {
 
 // Test webhook route to verify it's accessible
 app.get("/clerk", (req, res) => {
-  res.json({ message: "Clerk webhook endpoint is ready", method: "GET not supported, use POST" });
+  res.json({
+    message: "Clerk webhook endpoint is ready",
+    method: "GET not supported, use POST",
+  });
 });
 
 // Test route to manually create a user
@@ -50,7 +53,7 @@ app.post("/test-user", async (req, res) => {
       imageUrl: "https://via.placeholder.com/150",
       enrolledCourses: [],
     };
-    
+
     const createdUser = await User.create(testUser);
     res.json({ message: "Test user created successfully", user: createdUser });
   } catch (error) {
@@ -59,25 +62,32 @@ app.post("/test-user", async (req, res) => {
   }
 });
 
-// Initialize database connection
-const startServer = async () => {
+// Initialize database connection for local development
+const initializeApp = async () => {
   try {
     await connectDB();
-    
+    console.log("Database connected successfully");
+  } catch (error) {
+    console.error("Failed to connect to database:", error);
+    if (process.env.NODE_ENV !== "production") {
+      process.exit(1);
+    }
+  }
+};
+
+// For local development only
+if (process.env.NODE_ENV !== "production") {
+  const PORT = process.env.PORT || 3000;
+  
+  initializeApp().then(() => {
     app.listen(PORT, () => {
       console.log(`Server is running on port ${PORT}`);
       console.log(`Webhook endpoint available at: http://localhost:${PORT}/clerk`);
     });
-  } catch (error) {
-    console.error("Failed to start server:", error);
-    process.exit(1);
-  }
-};
-
-// For local development
-if (process.env.NODE_ENV !== 'production') {
-  startServer();
+  });
+} else {
+  // For Vercel - initialize database connection
+  initializeApp();
 }
 
-// Export for Vercel
 export default app;
