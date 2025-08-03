@@ -50,7 +50,7 @@ const startServer = async () => {
 };
 
 // For local development
-if (process.env.NODE_ENV !== 'production') {
+if (process.env.NODE_ENV !== "production") {
   startServer();
 }
 
