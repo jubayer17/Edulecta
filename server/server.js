@@ -4,34 +4,36 @@ import dotenv from "dotenv";
 import connectDB from "./configs/mongodb.js";
 import { handleClerkWebhook } from "./controllers/webhooks.js";
 
+// Load environment variables
 dotenv.config();
 
 const app = express();
+const PORT = process.env.PORT || 3000;
+
+// Middleware
 app.use(cors());
 
-// Raw body parser for Clerk webhook
-app.post(
-  "/clerk",
-  express.raw({ type: "application/json" }),
-  async (req, res) => {
-    try {
-      const body = JSON.parse(req.body.toString());
-      req.body = body;
-      return handleClerkWebhook(req, res);
-    } catch (error) {
-      console.error("Error parsing webhook body:", error);
-      return res.status(400).json({ error: "Invalid JSON" });
-    }
+// Clerk webhook endpoint - needs raw body for signature verification
+app.post("/clerk", express.raw({ type: "application/json" }), (req, res) => {
+  try {
+    const body = JSON.parse(req.body.toString());
+    req.body = body;
+    return handleClerkWebhook(req, res);
+  } catch (error) {
+    console.error("Error parsing webhook body:", error);
+    return res.status(400).json({ error: "Invalid JSON" });
   }
-);
+});
 
-// JSON parser for everything else
+// General JSON middleware for other routes
 app.use(express.json());
 
+// Test route
 app.get("/", (req, res) => {
   res.send("Server is running");
 });
 
+// Test webhook route to verify it's accessible
 app.get("/clerk", (req, res) => {
   res.json({
     message: "Clerk webhook endpoint is ready",
@@ -39,6 +41,7 @@ app.get("/clerk", (req, res) => {
   });
 });
 
+// Test route to manually create a user
 app.post("/test-user", async (req, res) => {
   try {
     const User = (await import("./models/User.js")).default;
@@ -50,6 +53,7 @@ app.post("/test-user", async (req, res) => {
       imageUrl: "https://via.placeholder.com/150",
       enrolledCourses: [],
     };
+
     const createdUser = await User.create(testUser);
     res.json({ message: "Test user created successfully", user: createdUser });
   } catch (error) {
@@ -58,7 +62,34 @@ app.post("/test-user", async (req, res) => {
   }
 });
 
-// Always connect to MongoDB (whether local or Vercel)
-await connectDB();
+// Initialize database connection for local development
+const initializeApp = async () => {
+  try {
+    await connectDB();
+    console.log("Database connected successfully");
+  } catch (error) {
+    console.error("Failed to connect to database:", error);
+    if (process.env.NODE_ENV !== "production") {
+      process.exit(1);
+    }
+  }
+};
+
+// For local development only
+if (process.env.NODE_ENV !== "production") {
+  const PORT = process.env.PORT || 3000;
+
+  initializeApp().then(() => {
+    app.listen(PORT, () => {
+      console.log(`Server is running on port ${PORT}`);
+      console.log(
+        `Webhook endpoint available at: http://localhost:${PORT}/clerk`
+      );
+    });
+  });
+} else {
+  // For Vercel - initialize database connection
+  initializeApp();
+}
 
 export default app;
