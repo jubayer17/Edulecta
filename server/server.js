@@ -2,22 +2,29 @@ import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 import connectDB from "./configs/mongodb.js";
+import { rawBodyMiddleware } from "./middlewares/rawBodyMiddleware.js";
 import { handleClerkWebhook } from "./controllers/webhooks.js";
 
-// Load environment variables
 dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Middleware
 app.use(cors());
 
-// Clerk webhook endpoint - needs raw body for signature verification
-app.post("/clerk", express.raw({ type: "application/json" }), (req, res) => {
+// Use rawBodyMiddleware before any JSON parsing and before webhook route
+app.use(rawBodyMiddleware);
+
+// Use express.json() for all other routes
+app.use(express.json());
+
+// Clerk webhook endpoint
+app.post("/clerk", (req, res) => {
   try {
-    const body = JSON.parse(req.body.toString());
-    req.body = body;
+    // req.rawBody set by rawBodyMiddleware
+    if (!req.rawBody) throw new Error("Missing raw body");
+
+    req.body = JSON.parse(req.rawBody);
     return handleClerkWebhook(req, res);
   } catch (error) {
     console.error("Error parsing webhook body:", error);
@@ -25,15 +32,10 @@ app.post("/clerk", express.raw({ type: "application/json" }), (req, res) => {
   }
 });
 
-// General JSON middleware for other routes
-app.use(express.json());
-
-// Test route
 app.get("/", (req, res) => {
   res.send("Server is running");
 });
 
-// Test webhook route to verify it's accessible
 app.get("/clerk", (req, res) => {
   res.json({
     message: "Clerk webhook endpoint is ready",
@@ -41,7 +43,6 @@ app.get("/clerk", (req, res) => {
   });
 });
 
-// Test route to manually create a user
 app.post("/test-user", async (req, res) => {
   try {
     const User = (await import("./models/User.js")).default;
@@ -53,7 +54,6 @@ app.post("/test-user", async (req, res) => {
       imageUrl: "https://via.placeholder.com/150",
       enrolledCourses: [],
     };
-
     const createdUser = await User.create(testUser);
     res.json({ message: "Test user created successfully", user: createdUser });
   } catch (error) {
@@ -62,7 +62,6 @@ app.post("/test-user", async (req, res) => {
   }
 });
 
-// Initialize database connection for local development
 const initializeApp = async () => {
   try {
     await connectDB();
@@ -75,10 +74,7 @@ const initializeApp = async () => {
   }
 };
 
-// For local development only
 if (process.env.NODE_ENV !== "production") {
-  const PORT = process.env.PORT || 3000;
-
   initializeApp().then(() => {
     app.listen(PORT, () => {
       console.log(`Server is running on port ${PORT}`);
@@ -88,7 +84,6 @@ if (process.env.NODE_ENV !== "production") {
     });
   });
 } else {
-  // For Vercel - initialize database connection
   initializeApp();
 }
 

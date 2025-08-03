@@ -1,18 +1,29 @@
 import { Webhook } from "svix";
 import User from "../models/User.js";
 
-//API Controller to manage clerk with database
-
 export const handleClerkWebhook = async (req, res) => {
   try {
     const whook = new Webhook(process.env.CLERK_WEBHOOK_SECRET);
-    await whook.verify(JSON.stringify(req.body), {
+
+    const svixHeaders = {
       "svix-id": req.headers["svix-id"],
       "svix-timestamp": req.headers["svix-timestamp"],
       "svix-signature": req.headers["svix-signature"],
-    });
+    };
+
+    if (
+      !svixHeaders["svix-id"] ||
+      !svixHeaders["svix-timestamp"] ||
+      !svixHeaders["svix-signature"]
+    ) {
+      return res.status(400).json({ error: "Missing Svix signature headers" });
+    }
+
+    await whook.verify(req.rawBody, svixHeaders);
+
     const { data, type } = req.body;
     console.log("Webhook received:", type, data);
+
     switch (type) {
       case "user.created": {
         const userData = {
@@ -20,13 +31,13 @@ export const handleClerkWebhook = async (req, res) => {
           username:
             data.username || (data.first_name + " " + data.last_name).trim(),
           email: data.email_addresses?.[0]?.email_address,
-          password: "clerk_managed", // Clerk manages authentication
+          password: "clerk_managed",
           imageUrl:
             data.image_url ||
             data.profile_image_url ||
-            "https://via.placeholder.com/150", // Default image if none provided
-          enrolledCourses: [], // Initialize as empty array
-          createdAt: new Date(data.created_at) || new Date(),
+            "https://via.placeholder.com/150",
+          enrolledCourses: [],
+          createdAt: data.created_at ? new Date(data.created_at) : new Date(),
           timestamp: new Date(),
         };
         await User.create(userData);
@@ -54,7 +65,10 @@ export const handleClerkWebhook = async (req, res) => {
         return res.status(200).json({ message: "User deleted successfully" });
       }
       default:
-        return res.status(400).json({ error: "Unhandled event type" });
+        console.log(`Unhandled event type received: ${type}`);
+        return res
+          .status(200)
+          .json({ message: `Ignored unhandled event type: ${type}` });
     }
   } catch (error) {
     console.error("Error handling Clerk webhook:", error);
