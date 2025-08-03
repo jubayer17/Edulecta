@@ -1,22 +1,18 @@
+// Middleware to capture raw body for webhook signature verification
 export const rawBodyMiddleware = (req, res, next) => {
+  // Only process raw body for webhook endpoint
   if (req.path === "/clerk" && req.method === "POST") {
-    let data = "";
+    let rawBody = "";
+
     req.setEncoding("utf8");
 
     req.on("data", (chunk) => {
-      data += chunk;
+      rawBody += chunk;
     });
 
     req.on("end", () => {
-      req.rawBody = data;
+      req.rawBody = rawBody;
       next();
-    });
-
-    req.on("error", (err) => {
-      console.error("Error in rawBodyMiddleware:", err);
-      if (!res.headersSent) {
-        res.status(400).send("Invalid request");
-      }
     });
   } else {
     next();
