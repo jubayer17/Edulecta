@@ -4,8 +4,10 @@ import { AppContext } from "./AppContext";
 import { dummyCourses } from "../assets/assets";
 import { useNavigate } from "react-router-dom";
 import humanizeDuration from "humanize-duration";
+import { useAuth, useUser } from "@clerk/clerk-react";
+
 export const AppContextProvider = ({ children }) => {
-  const [user, setUser] = useState(null);
+  const [users, setUsers] = useState(null);
   const [theme, setTheme] = useState("light");
   const [allCourses, setAllCourses] = useState([]);
   const [isEducator, setIsEducator] = useState(true);
@@ -13,6 +15,9 @@ export const AppContextProvider = ({ children }) => {
 
   const currency = import.meta.env.VITE_CURRENCY;
   const navigate = useNavigate();
+
+  const { getToken } = useAuth();
+  const { user } = useUser();
 
   const fetchAllCourses = async () => {
     setAllCourses(dummyCourses);
@@ -80,7 +85,7 @@ export const AppContextProvider = ({ children }) => {
     try {
       // Use provided userId or current user's id, or default test user ID
       const targetUserId =
-        userId || (user && user.id) || "user_2qQlvXyr02B4Bq6hT0Gvaa5fT9V";
+        userId || (users && users.id) || "user_2qQlvXyr02B4Bq6hT0Gvaa5fT9V";
 
       // Filter courses where the user is enrolled
       const userEnrolledCourses = dummyCourses.filter(
@@ -102,11 +107,23 @@ export const AppContextProvider = ({ children }) => {
     fetchAllCourses();
     // Fetch enrolled courses when component mounts
     fetchUserEnrolledCourses();
-  }, [user]); // Re-fetch when user changes
+  }, [users]); // Re-fetch when user changes
+
+  // If you want to log user data for debugging
+  const consoleLogUser = async () => {
+    console.log(await getToken());
+  };
+
+  useEffect(() => {
+    // If user is authenticated, set user data
+    if (user) {
+      consoleLogUser();
+    }
+  }, [user]);
 
   const value = {
-    user,
-    setUser,
+    users,
+    setUsers,
     theme,
     setTheme,
     currency,

@@ -5,6 +5,11 @@ import path from "path";
 import { fileURLToPath } from "url";
 import connectDB from "./configs/mongodb.js";
 import { handleClerkWebhook } from "./controllers/webhooks.js";
+import educatorRouter from "./routes/educatorRoutes.js";
+import courseRouter from "./routes/courseRoute.js";
+import userRouter from "./routes/userRoute.js";
+import { clerkMiddleware } from "@clerk/express";
+import connectCloudinary from "./configs/cloudinary.js";
 
 // Get current directory for ES modules
 const __filename = fileURLToPath(import.meta.url);
@@ -16,7 +21,22 @@ dotenv.config({ path: path.join(__dirname, ".env") });
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Middleware
 app.use(cors());
+app.use(clerkMiddleware());
+
+await connectDB();
+await connectCloudinary();
+
+// Debug middleware to log requests
+app.use((req, res, next) => {
+  console.log(`📝 ${req.method} ${req.path}`);
+  console.log(
+    "🔍 Headers:",
+    req.headers.authorization ? "Auth header present" : "No auth header"
+  );
+  next();
+});
 
 // Parse raw body for webhook signature verification
 app.use("/clerk", express.raw({ type: "application/json" }));
@@ -48,6 +68,22 @@ app.get("/clerk", (req, res) => {
   res.json({
     message: "Clerk webhook endpoint is ready",
     method: "GET not supported, use POST",
+  });
+});
+
+app.use("/api/educator", educatorRouter);
+app.use("/api/course", courseRouter);
+app.use("/api/user", userRouter);
+
+// Test endpoint to check auth without requiring it
+app.get("/test-auth", (req, res) => {
+  res.json({
+    message: "Auth test endpoint",
+    auth: req.auth || null,
+    headers: {
+      authorization: req.headers.authorization || "Not provided",
+      cookie: req.headers.cookie || "Not provided",
+    },
   });
 });
 

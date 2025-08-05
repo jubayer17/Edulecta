@@ -76,8 +76,35 @@ export const handleClerkWebhook = async (req, res) => {
 
           const userData = {
             _id: data.id,
-            username:
-              data.username || `${data.first_name} ${data.last_name}`.trim(),
+            username: (() => {
+              // Try different fallback options for username
+              if (data.username && data.username !== "null") {
+                return data.username;
+              }
+
+              const firstName =
+                data.first_name && data.first_name !== "null"
+                  ? data.first_name
+                  : "";
+              const lastName =
+                data.last_name && data.last_name !== "null"
+                  ? data.last_name
+                  : "";
+              const fullName = `${firstName} ${lastName}`.trim();
+
+              if (fullName && fullName !== "") {
+                return fullName;
+              }
+
+              // Fallback to email prefix if no name available
+              const email = data.email_addresses?.[0]?.email_address || "";
+              if (email) {
+                return email.split("@")[0];
+              }
+
+              // Final fallback
+              return `User_${data.id.slice(-6)}`;
+            })(),
             email: data.email_addresses?.[0]?.email_address || "",
             password: "clerk_managed",
             imageUrl:
@@ -121,8 +148,35 @@ export const handleClerkWebhook = async (req, res) => {
       case "user.updated": {
         try {
           const updateData = {
-            username:
-              data.username || `${data.first_name} ${data.last_name}`.trim(),
+            username: (() => {
+              // Try different fallback options for username
+              if (data.username && data.username !== "null") {
+                return data.username;
+              }
+
+              const firstName =
+                data.first_name && data.first_name !== "null"
+                  ? data.first_name
+                  : "";
+              const lastName =
+                data.last_name && data.last_name !== "null"
+                  ? data.last_name
+                  : "";
+              const fullName = `${firstName} ${lastName}`.trim();
+
+              if (fullName && fullName !== "") {
+                return fullName;
+              }
+
+              // Fallback to email prefix if no name available
+              const email = data.email_addresses?.[0]?.email_address || "";
+              if (email) {
+                return email.split("@")[0];
+              }
+
+              // Final fallback
+              return `User_${data.id.slice(-6)}`;
+            })(),
             email: data.email_addresses?.[0]?.email_address || "",
             imageUrl:
               data.image_url ||
