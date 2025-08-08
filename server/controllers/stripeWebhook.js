@@ -8,7 +8,7 @@ let stripeInstance = null;
 const getStripeInstance = () => {
   if (!stripeInstance) {
     if (!process.env.STRIPE_SECRET_KEY) {
-      throw new Error('STRIPE_SECRET_KEY environment variable is not set');
+      throw new Error("STRIPE_SECRET_KEY environment variable is not set");
     }
     stripeInstance = new Stripe(process.env.STRIPE_SECRET_KEY);
   }
@@ -17,7 +17,7 @@ const getStripeInstance = () => {
 
 const getEndpointSecret = () => {
   if (!process.env.STRIPE_WEBHOOK_SECRET) {
-    throw new Error('STRIPE_WEBHOOK_SECRET environment variable is not set');
+    throw new Error("STRIPE_WEBHOOK_SECRET environment variable is not set");
   }
   return process.env.STRIPE_WEBHOOK_SECRET;
 };
