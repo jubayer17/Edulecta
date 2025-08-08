@@ -259,6 +259,10 @@ export const purchaseCourse = async (req, res) => {
     const newPurchase = await Purchase.create(purchaseData);
 
     // Use the getStripeInstance function to ensure env vars are loaded
+    // Add unique identifiers to ensure new session creation every time
+    const timestamp = Date.now();
+    const uniqueId = `${userId}_${courseId}_${timestamp}`;
+
     const session = await getStripeInstance().checkout.sessions.create({
       payment_method_types: ["card"],
       line_items: [
@@ -266,7 +270,7 @@ export const purchaseCourse = async (req, res) => {
           price_data: {
             currency: "USD",
             product_data: {
-              name: courseData.courseTitle,
+              name: `${courseData.courseTitle} - ${timestamp}`, // Add timestamp to make it unique
               description: courseData.courseDescription,
               images: [courseData.courseThumbnail],
             },
@@ -276,14 +280,24 @@ export const purchaseCourse = async (req, res) => {
         },
       ],
       mode: "payment",
-      success_url: `${baseUrl}/success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${baseUrl}/cancel?session_id={CHECKOUT_SESSION_ID}`,
+      success_url: `${baseUrl}/success?session_id={CHECKOUT_SESSION_ID}&purchase_id=${newPurchase._id}`,
+      cancel_url: `${baseUrl}/cancel?session_id={CHECKOUT_SESSION_ID}&purchase_id=${newPurchase._id}`,
       metadata: {
         purchaseId: newPurchase._id.toString(),
         userId,
         courseId,
+        uniqueId, // Add unique identifier
+        timestamp: timestamp.toString(),
       },
+      // Add client_reference_id to ensure uniqueness
+      client_reference_id: uniqueId,
+      // Add expires_at to prevent session reuse (1 hour from now)
+      expires_at: Math.floor(Date.now() / 1000) + 60 * 60,
     });
+
+    console.log(
+      `✅ Created Stripe session: ${session.id} with unique ID: ${uniqueId}`
+    );
 
     return res.status(200).json({
       success: true,
@@ -291,6 +305,14 @@ export const purchaseCourse = async (req, res) => {
       sessionId: session.id,
       sessionUrl: session.url,
       purchaseId: newPurchase._id,
+      uniqueId,
+      timestamp,
+      debug: {
+        courseTitle: courseData.courseTitle,
+        amount: newPurchase.amount,
+        userId,
+        courseId,
+      },
     });
   } catch (error) {
     console.error("❌ Error purchasing course:", error.message);
@@ -436,12 +458,54 @@ export const manualCompletePayment = async (req, res) => {
 
     // Enroll user in course
     const user = await User.findById(purchase.userId);
-    if (user && !user.enrolledCourses.includes(purchase.courseId)) {
-      user.enrolledCourses.push(purchase.courseId);
-      await user.save();
-      console.log(
-        `✅ User ${purchase.userId} enrolled in course ${purchase.courseId}`
+    const course = await Course.findById(purchase.courseId);
+
+    if (user && course) {
+      // Check if user is not already enrolled
+      const isUserEnrolled = user.enrolledCourses.some(
+        (enrolledCourseId) =>
+          enrolledCourseId.toString() === course._id.toString()
       );
+
+      if (!isUserEnrolled) {
+        user.enrolledCourses.push(course._id);
+        await user.save();
+        console.log(
+          `✅ User ${purchase.userId} enrolled in course ${purchase.courseId}`
+        );
+      }
+
+      // Check if course doesn't already have this student
+      if (!course.enrolledStudents.includes(user._id)) {
+        // Ensure we're pushing the correct string type
+        const userIdString = String(user._id);
+        course.enrolledStudents.push(userIdString);
+
+        console.log(
+          `🔍 Debug - pushing userIdString: ${userIdString} to course ${course._id}`
+        );
+        console.log(
+          `🔍 Debug - enrolledStudents before save: ${JSON.stringify(
+            course.enrolledStudents
+          )}`
+        );
+
+        // Force mark the field as modified to ensure Mongoose saves it
+        course.markModified("enrolledStudents");
+        await course.save();
+
+        console.log(
+          `✅ Added user ${userIdString} to course ${course._id} enrolledStudents`
+        );
+
+        // Verify the save worked
+        const verifyCourse = await Course.findById(course._id);
+        console.log(
+          `🔍 Verification - course enrolledStudents after save: ${JSON.stringify(
+            verifyCourse.enrolledStudents
+          )}`
+        );
+      }
     }
 
     return res.status(200).json({
@@ -547,7 +611,13 @@ export const simulateWebhook = async (req, res) => {
       const courseData = await Course.findById(courseId);
 
       if (userData && courseData) {
-        if (!userData.enrolledCourses.includes(courseData._id)) {
+        // Check if user is not already enrolled
+        const isUserEnrolled = userData.enrolledCourses.some(
+          (enrolledCourseId) =>
+            enrolledCourseId.toString() === courseData._id.toString()
+        );
+
+        if (!isUserEnrolled) {
           userData.enrolledCourses.push(courseData._id);
           await userData.save();
           console.log(
@@ -556,6 +626,33 @@ export const simulateWebhook = async (req, res) => {
         } else {
           console.log(
             `ℹ️ User ${userData._id} already enrolled in course ${courseData._id}`
+          );
+        }
+
+        // Check if course doesn't already have this student
+        if (!courseData.enrolledStudents.includes(userData._id)) {
+          // Ensure we're pushing the correct string type
+          const userIdString = String(userData._id);
+          courseData.enrolledStudents.push(userIdString);
+
+          console.log(
+            `🔍 Debug - pushing userIdString: ${userIdString} to course ${courseData._id}`
+          );
+
+          // Force mark the field as modified to ensure Mongoose saves it
+          courseData.markModified("enrolledStudents");
+          await courseData.save();
+
+          console.log(
+            `✅ Added user ${userIdString} to course ${courseData._id} enrolledStudents`
+          );
+
+          // Verify the save worked
+          const verifyCourse = await Course.findById(courseData._id);
+          console.log(
+            `🔍 Verification - course enrolledStudents after save: ${JSON.stringify(
+              verifyCourse.enrolledStudents
+            )}`
           );
         }
       }
@@ -648,16 +745,53 @@ export const testWithDummyData = async (req, res) => {
     // If using real user/course, enroll the user
     if (existingUser && existingCourse) {
       const userData = await User.findById(userIdToUse);
-      if (userData && !userData.enrolledCourses.includes(courseIdToUse)) {
-        userData.enrolledCourses.push(courseIdToUse);
-        await userData.save();
-        console.log(
-          `✅ User ${userIdToUse} enrolled in course ${courseIdToUse}`
+      const courseData = await Course.findById(courseIdToUse);
+
+      if (userData && courseData) {
+        // Check if user is not already enrolled
+        const isUserEnrolled = userData.enrolledCourses.some(
+          (enrolledCourseId) =>
+            enrolledCourseId.toString() === courseData._id.toString()
         );
-      } else if (userData) {
-        console.log(
-          `ℹ️ User ${userIdToUse} already enrolled in course ${courseIdToUse}`
-        );
+
+        if (!isUserEnrolled) {
+          userData.enrolledCourses.push(courseData._id);
+          await userData.save();
+          console.log(
+            `✅ User ${userIdToUse} enrolled in course ${courseIdToUse}`
+          );
+        } else {
+          console.log(
+            `ℹ️ User ${userIdToUse} already enrolled in course ${courseIdToUse}`
+          );
+        }
+
+        // Check if course doesn't already have this student
+        if (!courseData.enrolledStudents.includes(userData._id)) {
+          // Ensure we're pushing the correct string type
+          const userIdString = String(userData._id);
+          courseData.enrolledStudents.push(userIdString);
+
+          console.log(
+            `🔍 Debug - pushing userIdString: ${userIdString} to course ${courseData._id}`
+          );
+
+          // Force mark the field as modified to ensure Mongoose saves it
+          courseData.markModified("enrolledStudents");
+          await courseData.save();
+
+          console.log(
+            `✅ Added user ${userIdString} to course ${courseData._id} enrolledStudents`
+          );
+
+          // Verify the save worked
+          const verifyCourse = await Course.findById(courseData._id);
+          console.log(
+            `🔍 Verification - course enrolledStudents after save: ${JSON.stringify(
+              verifyCourse.enrolledStudents
+            )}`
+          );
+        }
       }
     }
 
