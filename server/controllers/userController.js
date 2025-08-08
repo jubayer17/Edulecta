@@ -5,8 +5,17 @@ import Purchase from "../models/Purchase.js";
 import Stripe from "stripe";
 import mongoose from "mongoose";
 
-// Initialize Stripe instance at module level (following best practices)
-const stripeInstance = new Stripe(process.env.STRIPE_SECRET_KEY);
+// Initialize Stripe instance only when needed to ensure env vars are loaded
+let stripeInstance = null;
+const getStripeInstance = () => {
+  if (!stripeInstance) {
+    if (!process.env.STRIPE_SECRET_KEY) {
+      throw new Error('STRIPE_SECRET_KEY environment variable is not set');
+    }
+    stripeInstance = new Stripe(process.env.STRIPE_SECRET_KEY);
+  }
+  return stripeInstance;
+};
 
 export const GetUserData = async (req, res) => {
   try {
@@ -249,8 +258,8 @@ export const purchaseCourse = async (req, res) => {
 
     const newPurchase = await Purchase.create(purchaseData);
 
-    // Use the module-level stripeInstance
-    const session = await stripeInstance.checkout.sessions.create({
+    // Use the getStripeInstance function to ensure env vars are loaded
+    const session = await getStripeInstance().checkout.sessions.create({
       payment_method_types: ["card"],
       line_items: [
         {

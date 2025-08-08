@@ -3,8 +3,24 @@ import connectDB from "../configs/mongodb.js";
 import Purchase from "../models/Purchase.js";
 import User from "../models/User.js";
 
-const stripeInstance = new Stripe(process.env.STRIPE_SECRET_KEY);
-const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
+// Initialize Stripe instance only when needed to ensure env vars are loaded
+let stripeInstance = null;
+const getStripeInstance = () => {
+  if (!stripeInstance) {
+    if (!process.env.STRIPE_SECRET_KEY) {
+      throw new Error('STRIPE_SECRET_KEY environment variable is not set');
+    }
+    stripeInstance = new Stripe(process.env.STRIPE_SECRET_KEY);
+  }
+  return stripeInstance;
+};
+
+const getEndpointSecret = () => {
+  if (!process.env.STRIPE_WEBHOOK_SECRET) {
+    throw new Error('STRIPE_WEBHOOK_SECRET environment variable is not set');
+  }
+  return process.env.STRIPE_WEBHOOK_SECRET;
+};
 
 export const handleStripeWebhook = async (req, res) => {
   const sig = req.headers["stripe-signature"];
@@ -12,10 +28,10 @@ export const handleStripeWebhook = async (req, res) => {
 
   try {
     // req.body is a Buffer here because of express.raw()
-    event = stripeInstance.webhooks.constructEvent(
+    event = getStripeInstance().webhooks.constructEvent(
       req.body,
       sig,
-      endpointSecret
+      getEndpointSecret()
     );
     console.log("✅ Stripe webhook signature verified:", event.type);
   } catch (err) {
