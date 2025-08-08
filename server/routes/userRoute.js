@@ -3,6 +3,7 @@ import {
   GetUserData,
   GetUserEnrolledCourses,
   EnrollInCourse,
+  purchaseCourse,
 } from "../controllers/userController.js";
 import { clerkMiddleware } from "@clerk/express";
 import connectDB from "../configs/mongodb.js";
@@ -17,6 +18,22 @@ userRouter.get("/enrolled-courses", GetUserEnrolledCourses);
 
 // Enroll in a course (protected route)
 userRouter.post("/enroll", EnrollInCourse);
+
+// Purchase a course (protected route)
+userRouter.post("/purchase", purchaseCourse);
+
+// Test JSON parsing endpoint
+userRouter.post("/test-json", (req, res) => {
+  console.log("🧪 Test JSON endpoint hit");
+  console.log("📦 req.body:", req.body);
+  console.log("📝 Content-Type:", req.headers["content-type"]);
+
+  res.json({
+    success: true,
+    receivedBody: req.body,
+    contentType: req.headers["content-type"],
+  });
+});
 
 // Test endpoint without authentication (temporary)
 userRouter.get("/test", async (req, res) => {

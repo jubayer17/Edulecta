@@ -1,26 +1,23 @@
 import connectDB from "../configs/mongodb.js";
+import mongoose from "mongoose";
+import User from "../models/User.js";
+import Course from "../models/Course.js";
+import Purchase from "../models/Purchase.js";
 
 // Get All Courses (Public endpoint for students)
 export const getAllCourse = async (req, res) => {
   try {
-    // Connect to the database
     await connectDB();
-    console.log("✅ Database connection successful");
 
-    // Import the Course model dynamically
-    const Course = (await import("../models/Course.js")).default;
-
-    // Find all published courses and populate educator details
     const courses = await Course.find({ isPublished: true })
       .select("-courseContent -enrolledStudents") // Exclude sensitive data
       .populate({
         path: "educator",
-        select: "username imageUrl", // Only get educator username and image
+        select: "username imageUrl",
       })
-      .sort({ createdAt: -1 }) // Sort by newest first
-      .lean(); // Use lean() for better performance since we're not modifying
+      .sort({ createdAt: -1 })
+      .lean();
 
-    // Check if courses exist
     if (!courses || courses.length === 0) {
       return res.status(404).json({
         success: false,
@@ -28,7 +25,6 @@ export const getAllCourse = async (req, res) => {
       });
     }
 
-    // Return successful response
     return res.status(200).json({
       success: true,
       courses,
@@ -45,40 +41,28 @@ export const getAllCourse = async (req, res) => {
   }
 };
 
-//Get Course by ID (Public endpoint for students)
+// Get Course by ID (Public endpoint for students)
 export const getCourseById = async (req, res) => {
   try {
-    // Connect to the database
     await connectDB();
-    console.log("✅ Database connection successful");
 
-    // Import the Course model dynamically
-    const Course = (await import("../models/Course.js")).default;
-
-    // Get course ID from request parameters
     const { id } = req.params;
 
-    // Validate course ID format
-    if (!id || !id.match(/^[0-9a-fA-F]{24}$/)) {
+    if (!mongoose.Types.ObjectId.isValid(id)) {
       return res.status(400).json({
         success: false,
         message: "Invalid course ID format",
       });
     }
 
-    // Find course by ID, check if published, and populate educator details
-    const course = await Course.findOne({
-      _id: id,
-      isPublished: true,
-    })
-      .select("-enrolledStudents") // Exclude sensitive data but keep courseContent for learning
+    const course = await Course.findOne({ _id: id, isPublished: true })
+      .select("-enrolledStudents")
       .populate({
         path: "educator",
-        select: "username imageUrl", // Only get educator username and image
+        select: "username imageUrl",
       })
-      .lean(); // Use lean() for better performance
+      .lean();
 
-    // Check if course exists and is published
     if (!course) {
       return res.status(404).json({
         success: false,
@@ -86,20 +70,18 @@ export const getCourseById = async (req, res) => {
       });
     }
 
-    //Remove lecture url if preview is false
-    if (course.courseContent && Array.isArray(course.courseContent)) {
+    if (Array.isArray(course.courseContent)) {
       course.courseContent.forEach((chapter) => {
-        if (chapter.chapterContent && Array.isArray(chapter.chapterContent)) {
+        if (Array.isArray(chapter.chapterContent)) {
           chapter.chapterContent.forEach((lecture) => {
             if (!lecture.isPreviewFree) {
-              lecture.lectureUrl = undefined; // Remove lecture URL if not a preview
+              lecture.lectureUrl = undefined;
             }
           });
         }
       });
     }
 
-    // Return successful response
     return res.status(200).json({
       success: true,
       course,
