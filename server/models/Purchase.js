@@ -11,11 +11,20 @@ const purchaseSchema = new mongoose.Schema(
     amount: { type: Number, required: true },
     status: {
       type: String,
-      enum: ["pending", "completed", "failed", "expired"],
+      enum: [
+        "pending",
+        "completed",
+        "failed",
+        "expired",
+        "canceled",
+        "refunded",
+        "processing",
+      ],
       default: "pending",
     },
     stripeSessionId: { type: String }, // For tracking Stripe checkout session
     paymentDate: { type: Date }, // When payment was actually completed
+    refundDate: { type: Date }, // When refund was processed
     purchaseDate: { type: Date, default: Date.now }, // When purchase was initiated
   },
   { timestamps: true }
