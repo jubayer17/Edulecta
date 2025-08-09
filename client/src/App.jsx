@@ -16,6 +16,7 @@ import MyCourses from "./pages/educator/MyCourses";
 import StudentsEnrolled from "./pages/educator/StudentsEnrolled";
 import UpdateCourses from "./pages/educator/UpdateCourses";
 import Navbar from "./components/student/Navbar.jsx";
+import { ToastContainer, toast } from "react-toastify";
 
 import { AppContextProvider } from "./context/AppContextProvider"; // <--- Import provider
 
@@ -26,6 +27,7 @@ const App = () => {
       {" "}
       {/* <-- Wrap here */}
       <div className="text-default min-h-screen bg-white">
+        <ToastContainer />
         {!isEducatorRoute && <Navbar />}
 
         <Routes>

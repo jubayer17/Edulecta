@@ -5,7 +5,6 @@ import Purchase from "../models/Purchase.js";
 import Stripe from "stripe";
 import mongoose from "mongoose";
 import CourseProgress from "../models/CourseProgress.js";
-import Course from "./../models/Course";
 
 // Initialize Stripe instance only when needed to ensure env vars are loaded
 let stripeInstance = null;
@@ -74,7 +73,7 @@ export const GetUserEnrolledCourses = async (req, res) => {
       .populate({
         path: "enrolledCourses",
         select:
-          "courseTitle courseDescription courseThumbnail coursePrice courseCategory courseContent educator",
+          "courseTitle createdAt courseDescription courseThumbnail coursePrice courseCategory courseContent educator",
         populate: {
           path: "educator",
           select: "username imageUrl",

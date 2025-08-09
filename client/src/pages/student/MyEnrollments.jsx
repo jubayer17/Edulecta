@@ -5,7 +5,7 @@ import Footer from "../../components/student/Footer";
 const MyEnrollments = () => {
   const {
     navigate,
-    enrolledCourses,
+    fullEnrolledCourses, // <-- use fullEnrolledCourses here
     calculateCourseDuration,
     calculateRating,
   } = useContext(AppContext);
@@ -54,8 +54,10 @@ const MyEnrollments = () => {
       return { text: "In Progress", color: "bg-yellow-100 text-yellow-700" };
     return { text: "Not Started", color: "bg-gray-100 text-gray-700" };
   };
+
   return (
     <>
+      {console.log("Rendering MyEnrollments page...")}
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 py-4 md:py-8 lg:py-12">
         <div className="max-w-7xl mx-auto px-3 sm:px-4 md:px-6 lg:px-16">
           {/* Page Header */}
@@ -70,8 +72,8 @@ const MyEnrollments = () => {
 
           {/* Mobile Card View (visible on small screens) */}
           <div className="block md:hidden space-y-3 sm:space-y-4">
-            {enrolledCourses && enrolledCourses.length > 0 ? (
-              enrolledCourses.map((course) => {
+            {fullEnrolledCourses && fullEnrolledCourses.length > 0 ? (
+              fullEnrolledCourses.map((course) => {
                 const totalLectures = getTotalLectures(course);
                 const completedLectures = getCompletedLectures(course);
                 const completionPercentage = getCompletionPercentage(course);
@@ -209,8 +211,8 @@ const MyEnrollments = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {enrolledCourses && enrolledCourses.length > 0 ? (
-                    enrolledCourses.map((course) => {
+                  {fullEnrolledCourses && fullEnrolledCourses.length > 0 ? (
+                    fullEnrolledCourses.map((course) => {
                       const totalLectures = getTotalLectures(course);
                       const completedLectures = getCompletedLectures(course);
                       const completionPercentage =
@@ -348,7 +350,6 @@ const MyEnrollments = () => {
           </div>
         </div>
       </div>
-
       {/* Footer with proper spacing */}
       <div className="mt-8 md:mt-12">
         <Footer />
