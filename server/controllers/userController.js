@@ -4,6 +4,8 @@ import Course from "../models/Course.js";
 import Purchase from "../models/Purchase.js";
 import Stripe from "stripe";
 import mongoose from "mongoose";
+import CourseProgress from "../models/CourseProgress.js";
+import Course from "./../models/Course";
 
 // Initialize Stripe instance only when needed to ensure env vars are loaded
 let stripeInstance = null;
@@ -828,5 +830,143 @@ export const testWithDummyData = async (req, res) => {
       message: error.message,
       stack: error.stack,
     });
+  }
+};
+
+//update user course progress
+
+export const updateUserCourseProgress = async (req, res) => {
+  try {
+    if (!req.auth || !req.auth().userId) {
+      return res.status(401).json({ success: false, message: "Unauthorized" });
+    }
+
+    const userId = req.auth().userId;
+    const { courseId, lectureId } = req.body;
+
+    if (!courseId || !lectureId) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Missing courseId or lectureId" });
+    }
+
+    let courseProgress = await CourseProgress.findOne({ userId, courseId });
+
+    if (courseProgress) {
+      if (!courseProgress.lectureCompleted.includes(lectureId)) {
+        courseProgress.lectureCompleted.push(lectureId);
+        await courseProgress.save();
+      } else {
+        return res.status(200).json({
+          success: true,
+          message: "Lecture already completed",
+          data: courseProgress,
+        });
+      }
+    } else {
+      courseProgress = await CourseProgress.create({
+        userId,
+        courseId,
+        lectureCompleted: [lectureId],
+        progress: 0,
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Course progress updated successfully",
+      data: courseProgress,
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// get user course progress
+
+export const getUserCourseProgress = async (req, res) => {
+  try {
+    if (!req.auth || !req.auth().userId) {
+      return res.status(401).json({ success: false, message: "Unauthorized" });
+    }
+
+    const userId = req.auth().userId;
+    const { courseId } = req.params;
+
+    if (!courseId) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Missing courseId" });
+    }
+
+    const courseProgress = await CourseProgress.findOne({ userId, courseId });
+
+    if (!courseProgress) {
+      return res
+        .status(404)
+        .json({ success: false, message: "No progress found" });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Course progress retrieved successfully",
+      data: courseProgress,
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// Add course rating
+export const addCourseRating = async (req, res) => {
+  try {
+    if (!req.auth || !req.auth().userId) {
+      return res.status(401).json({ success: false, message: "Unauthorized" });
+    }
+
+    const userId = req.auth().userId;
+    const { courseId, rating } = req.body;
+
+    if (!courseId || !rating || !userId || rating < 1 || rating > 5) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Invalid courseId or rating" });
+    }
+
+    // Find the course and update the rating
+    const course = await Course.findById(courseId);
+    if (!course) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Course not found" });
+    }
+    const user = await User.findById(userId);
+    if (!user || !user.enrolledCourses.includes(courseId)) {
+      return res.status(404).json({
+        success: false,
+        message: "User has not purchased the course or user not found ",
+      });
+    }
+
+    const existedRatingIndex = course.ratings.findIndex(
+      (rating) => rating.userId.toString() === userId.toString()
+    );
+
+    if (existedRatingIndex !== -1) {
+      // Update the course rating
+      course.courseRatings[existedRatingIndex].rating = rating;
+    } else {
+      // Add a new rating
+      course.courseRatings.push({ userId, rating });
+    }
+    await course.save();
+
+    return res.status(200).json({
+      success: true,
+      message: "Course rating added successfully",
+      data: course,
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
   }
 };

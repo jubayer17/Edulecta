@@ -10,11 +10,20 @@ import {
   getAllPurchases,
   simulateWebhook,
   testWithDummyData,
+  updateUserCourseProgress,
+  getUserCourseProgress,
+  addCourseRating,
 } from "../controllers/userController.js";
-import { clerkMiddleware } from "@clerk/express";
 import connectDB from "../configs/mongodb.js";
 
 const userRouter = express.Router();
+
+// Update user course status (protected route)
+userRouter.post("/get-course-progress/:courseId", getUserCourseProgress);
+
+userRouter.post("/add-rating", addCourseRating);
+
+userRouter.post("/update-course-progress", updateUserCourseProgress);
 
 // Get user data (protected route)
 userRouter.get("/profile", GetUserData);
