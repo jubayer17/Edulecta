@@ -18,10 +18,6 @@ const getStripeInstance = () => {
   return stripeInstance;
 };
 
-import bcrypt from "bcryptjs";
-import connectDB from "../configs/mongodb.js";
-import User from "../models/User.js";
-
 export const GetUserData = async (req, res) => {
   try {
     const auth = req.auth();
@@ -39,20 +35,7 @@ export const GetUserData = async (req, res) => {
     let user = await User.findById(userId).select("-password");
 
     if (!user) {
-      const username = auth?.username || `user_${Date.now()}`;
-      const email = auth?.emailAddress || `user_${Date.now()}@example.com`;
-      const imageUrl = auth?.imageUrl || "https://via.placeholder.com/150";
-      const passwordPlain = "defaultPass123"; // minimal fixed password
-      const hashedPassword = await bcrypt.hash(passwordPlain, 10);
-
-      user = await User.create({
-        _id: userId,
-        username,
-        email,
-        password: hashedPassword,
-        imageUrl,
-        enrolledCourses: [],
-      });
+      console.error("User not found:", userId);
     }
 
     return res.status(200).json({
