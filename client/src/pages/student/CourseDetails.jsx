@@ -5,6 +5,8 @@ import Footer from "../../components/student/Footer";
 import Loading from "../../components/student/Loading";
 import { assets } from "../../assets/assets";
 import YouTube from "react-youtube";
+import axios from "axios";
+import { toast } from "react-toastify";
 
 const CourseDetails = () => {
   const { id } = useParams();
@@ -15,6 +17,9 @@ const CourseDetails = () => {
     calculateCourseDuration,
     calculateNoOfLectures,
     formatLectureDuration,
+    backendUrl,
+    userData,
+    getToken,
   } = useContext(AppContext);
   const [courseData, setCourseData] = useState(null);
   const [playerData, setPlayerData] = useState(null);
@@ -24,7 +29,7 @@ const CourseDetails = () => {
     0: true, // First chapter open by default
     1: true, // Second chapter open by default
   });
-
+  console.log(userData);
   const toggleChapter = (chapterIndex) => {
     setExpandedChapters((prev) => ({
       ...prev,
@@ -60,12 +65,72 @@ const CourseDetails = () => {
     // Optionally handle state changes
   };
 
+  // const fetchCourseData = async () => {
+  //   try {
+  //     const { data } = await axios.get(backendUrl + "/api/course/" + id);
+  //     if (data.success) {
+  //       setCourseData(data);
+  //     } else {
+  //       toast.error(data.message);
+  //     }
+  //   } catch (error) {
+  //     console.error(error.message);
+  //   }
+  // };
+
+  // function to handle the when enroll course is pressed
+  const enrollCourse = async () => {
+    try {
+      if (!userData) {
+        toast.warn("Please login to enroll in the course");
+        return;
+      }
+
+      if (isAlreadyEnrolled) {
+        toast.warn("You are already enrolled in this course");
+        return;
+      }
+
+      const token = await getToken();
+
+      const { data } = await axios.post(
+        backendUrl + "/api/user/purchase",
+        { courseId: courseData._id },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      if (data.success && data.sessionUrl) {
+        toast.info("Redirecting to payment...");
+        window.location.href = data.sessionUrl;
+      } else {
+        toast.error(data.error || "Failed to start enrollment process");
+      }
+    } catch (error) {
+      toast.error("Something went wrong. Please try again.");
+      console.error(error.message);
+    }
+  };
+
   useEffect(() => {
     const found = allCourses.find((c) => c._id === id);
     setCourseData(found || null);
   }, [allCourses, id]);
 
+  useEffect(() => {
+    if (userData && courseData) {
+      const isEnrolled = userData.enrolledCourses.includes(courseData._id);
+      setIsAlreadyEnrolled(isEnrolled);
+    }
+  }, [userData, courseData]);
+
   if (!courseData) return <Loading />;
+
+  // console.log("Course Data:", courseData);
+  console.log("Course Data from details:", courseData);
 
   // Use the helper functions from context
   const rating = calculateRating(courseData);
@@ -108,7 +173,8 @@ const CourseDetails = () => {
               </div>
               <div className="text-center">
                 <div className="text-xl font-bold text-gray-800">
-                  {courseData.enrolledStudents.length}
+                  {courseData.enrolledStudents &&
+                    courseData.enrolledStudents.length}
                 </div>
                 <div className="text-xs text-gray-500 uppercase tracking-wide">
                   Students
@@ -168,8 +234,10 @@ const CourseDetails = () => {
                 </span>
                 <span className="mx-2">•</span>
                 <span>
-                  {courseData.enrolledStudents.length}{" "}
-                  {courseData.enrolledStudents.length === 1
+                  {courseData.enrolledStudents &&
+                    courseData.enrolledStudents.length}{" "}
+                  {courseData.enrolledStudents &&
+                  courseData.enrolledStudents.length === 0
                     ? "student"
                     : "students"}
                 </span>
@@ -186,7 +254,7 @@ const CourseDetails = () => {
               <div>
                 <p className="text-sm text-gray-500 mb-1">Instructor</p>
                 <p className="text-lg font-semibold text-gray-800">
-                  Jubayer Ahmed
+                  {courseData.educator.username}
                 </p>
                 <p className="text-sm text-gray-600">
                   Senior Full Stack Developer
@@ -269,103 +337,104 @@ const CourseDetails = () => {
               {totalLectures} lectures • {courseDuration}
             </p>
             <div className="pt-5">
-              {courseData.courseContent.map((chapter, index) => (
-                <div
-                  key={index}
-                  className="mb-4 border border-gray-200 rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-all duration-300"
-                >
+              {courseData.courseContent &&
+                courseData.courseContent.map((chapter, index) => (
                   <div
-                    className="flex items-center justify-between p-5 bg-gradient-to-r from-gray-50 to-gray-100 hover:from-blue-50 hover:to-blue-100 cursor-pointer transition-all duration-300 ease-in-out"
-                    onClick={() => toggleChapter(index)}
+                    key={index}
+                    className="mb-4 border border-gray-200 rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-all duration-300"
                   >
-                    <div className="flex items-center gap-3">
-                      <div className="p-1.5 rounded-full bg-white shadow-sm transition-transform duration-300 hover:scale-110">
-                        <img
-                          src={assets.down_arrow_icon}
-                          alt="arrow icon"
-                          className={`w-4 h-4 transition-all duration-500 ease-in-out ${
-                            expandedChapters[index]
-                              ? "rotate-180 text-blue-600"
-                              : "text-gray-600"
-                          }`}
-                        />
-                      </div>
-                      <p className="font-semibold text-gray-800 text-base transition-colors duration-300 hover:text-blue-600">
-                        {chapter.chapterTitle}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <span className="text-xs bg-blue-100 text-blue-700 px-3 py-1.5 rounded-full font-medium border border-blue-200">
-                        {chapter.chapterContent.length} lectures
-                      </span>
-                      <span className="text-xs text-gray-600 bg-white px-3 py-1.5 rounded-full border border-gray-200 font-medium">
-                        {calculateChapterTime(chapter)}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div
-                    className={`overflow-hidden transition-all duration-700 ease-in-out ${
-                      expandedChapters[index]
-                        ? "max-h-[2000px] opacity-100"
-                        : "max-h-0 opacity-0"
-                    }`}
-                  >
-                    <div className="bg-gradient-to-b from-white to-gray-50 border-t border-gray-100">
-                      {chapter.chapterContent.map((lecture, lectureIndex) => (
-                        <div
-                          key={lectureIndex}
-                          className="group flex items-center justify-between px-6 py-4 hover:bg-gradient-to-r hover:from-blue-50 cursor-pointer hover:to-indigo-50 border-b border-gray-100 last:border-b-0 transition-all duration-300 ease-in-out transform hover:translate-x-1"
-                        >
-                          <div className="flex items-center gap-4">
-                            <div className="p-2 rounded-full bg-blue-100 group-hover:bg-blue-200 group-hover:scale-110 transition-all duration-300">
-                              <img
-                                src={assets.play_icon}
-                                alt="play icon"
-                                className="w-3.5 h-3.5"
-                              />
-                            </div>
-                            <div className="flex-1">
-                              <p className="text-sm font-medium text-gray-800 group-hover:text-blue-700 transition-colors duration-300">
-                                {lecture.lectureTitle}
-                              </p>
-                              <p className="text-xs text-gray-500 mt-1 group-hover:text-blue-500 transition-colors duration-300">
-                                Lesson {lectureIndex + 1}
-                              </p>
-                            </div>
-                            {lecture.isPreviewFree && (
-                              <span
-                                onClick={() => {
-                                  // First scroll to top
-                                  window.scrollTo({
-                                    top: 0,
-                                    behavior: "smooth",
-                                  });
-
-                                  // Then set player data after a brief delay
-                                  setTimeout(() => {
-                                    setPlayerData({
-                                      videoId: lecture.lectureUrl
-                                        .split("/")
-                                        .pop(),
-                                    });
-                                  }, 300);
-                                }}
-                                className="text-xs text-green-700 bg-green-100 px-3 py-1 rounded-full cursor-pointer hover:bg-green-200 transition-colors duration-200 border border-green-200 font-medium"
-                              >
-                                Free Preview
-                              </span>
-                            )}
-                          </div>
-                          <div className="text-xs font-semibold text-blue-700 bg-blue-50 px-3 py-2 rounded-full border border-blue-200 group-hover:bg-blue-100 group-hover:scale-105 transition-all duration-300">
-                            {formatLectureDuration(lecture.lectureDuration)}
-                          </div>
+                    <div
+                      className="flex items-center justify-between p-5 bg-gradient-to-r from-gray-50 to-gray-100 hover:from-blue-50 hover:to-blue-100 cursor-pointer transition-all duration-300 ease-in-out"
+                      onClick={() => toggleChapter(index)}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="p-1.5 rounded-full bg-white shadow-sm transition-transform duration-300 hover:scale-110">
+                          <img
+                            src={assets.down_arrow_icon}
+                            alt="arrow icon"
+                            className={`w-4 h-4 transition-all duration-500 ease-in-out ${
+                              expandedChapters[index]
+                                ? "rotate-180 text-blue-600"
+                                : "text-gray-600"
+                            }`}
+                          />
                         </div>
-                      ))}
+                        <p className="font-semibold text-gray-800 text-base transition-colors duration-300 hover:text-blue-600">
+                          {chapter.chapterTitle}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <span className="text-xs bg-blue-100 text-blue-700 px-3 py-1.5 rounded-full font-medium border border-blue-200">
+                          {chapter.chapterContent.length} lectures
+                        </span>
+                        <span className="text-xs text-gray-600 bg-white px-3 py-1.5 rounded-full border border-gray-200 font-medium">
+                          {calculateChapterTime(chapter)}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div
+                      className={`overflow-hidden transition-all duration-700 ease-in-out ${
+                        expandedChapters[index]
+                          ? "max-h-[2000px] opacity-100"
+                          : "max-h-0 opacity-0"
+                      }`}
+                    >
+                      <div className="bg-gradient-to-b from-white to-gray-50 border-t border-gray-100">
+                        {chapter.chapterContent.map((lecture, lectureIndex) => (
+                          <div
+                            key={lectureIndex}
+                            className="group flex items-center justify-between px-6 py-4 hover:bg-gradient-to-r hover:from-blue-50 cursor-pointer hover:to-indigo-50 border-b border-gray-100 last:border-b-0 transition-all duration-300 ease-in-out transform hover:translate-x-1"
+                          >
+                            <div className="flex items-center gap-4">
+                              <div className="p-2 rounded-full bg-blue-100 group-hover:bg-blue-200 group-hover:scale-110 transition-all duration-300">
+                                <img
+                                  src={assets.play_icon}
+                                  alt="play icon"
+                                  className="w-3.5 h-3.5"
+                                />
+                              </div>
+                              <div className="flex-1">
+                                <p className="text-sm font-medium text-gray-800 group-hover:text-blue-700 transition-colors duration-300">
+                                  {lecture.lectureTitle}
+                                </p>
+                                <p className="text-xs text-gray-500 mt-1 group-hover:text-blue-500 transition-colors duration-300">
+                                  Lesson {lectureIndex + 1}
+                                </p>
+                              </div>
+                              {lecture.isPreviewFree && (
+                                <span
+                                  onClick={() => {
+                                    // First scroll to top
+                                    window.scrollTo({
+                                      top: 0,
+                                      behavior: "smooth",
+                                    });
+
+                                    // Then set player data after a brief delay
+                                    setTimeout(() => {
+                                      setPlayerData({
+                                        videoId: lecture.lectureUrl
+                                          .split("/")
+                                          .pop(),
+                                      });
+                                    }, 300);
+                                  }}
+                                  className="text-xs text-green-700 bg-green-100 px-3 py-1 rounded-full cursor-pointer hover:bg-green-200 transition-colors duration-200 border border-green-200 font-medium"
+                                >
+                                  Free Preview
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-xs font-semibold text-blue-700 bg-blue-50 px-3 py-2 rounded-full border border-blue-200 group-hover:bg-blue-100 group-hover:scale-105 transition-all duration-300">
+                              {formatLectureDuration(lecture.lectureDuration)}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                ))}
             </div>
           </div>
 
@@ -515,7 +584,8 @@ const CourseDetails = () => {
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-gray-600">Students:</span>
                   <span className="font-semibold text-gray-800">
-                    {courseData.enrolledStudents.length}
+                    {courseData.enrolledStudents &&
+                      courseData.enrolledStudents.length}
                   </span>
                 </div>
                 <div className="flex items-center justify-between text-sm">
@@ -548,9 +618,22 @@ const CourseDetails = () => {
 
               {/* Action Buttons */}
               <div className="space-y-3">
-                <button className="cursor-pointer w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold py-3 md:py-4 px-6 rounded-xl transition-all duration-300 transform hover:scale-105 hover:shadow-xl active:scale-95 text-sm md:text-base">
+                <button
+                  onClick={enrollCourse}
+                  disabled={isAlreadyEnrolled}
+                  className={`cursor-pointer w-full bg-gradient-to-r from-blue-600 to-indigo-600 
+    hover:from-blue-700 hover:to-indigo-700 text-white font-bold py-3 md:py-4 px-6 
+    rounded-xl transition-all duration-300 transform hover:scale-105 hover:shadow-xl 
+    active:scale-95 text-sm md:text-base
+    ${
+      isAlreadyEnrolled
+        ? "opacity-60 cursor-not-allowed hover:scale-100 hover:shadow-none"
+        : ""
+    }`}
+                >
                   {isAlreadyEnrolled ? "Already Enrolled" : "Enroll Now"}
                 </button>
+
                 <div className="grid grid-cols-2 gap-3 md:flex md:flex-col md:space-y-3 md:gap-0">
                   <button className="cursor-pointer w-full border-2 border-blue-600 text-blue-600 hover:bg-blue-600 hover:text-white font-semibold py-2 md:py-3 px-4 md:px-6 rounded-xl transition-all duration-300 hover:shadow-lg text-sm md:text-base">
                     Add to Wishlist

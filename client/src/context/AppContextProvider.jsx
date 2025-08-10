@@ -75,12 +75,13 @@ export const AppContextProvider = ({ children }) => {
 
     try {
       const token = await getToken();
+      console.log("Token:", token);
       if (!token) {
         toast.error("User not authenticated");
         return;
       }
 
-      const { data } = await axios.get(`${backendUrl}/api/user/profile`, {
+      const { data } = await axios.get(backendUrl + "/api/user/profile", {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -160,12 +161,16 @@ export const AppContextProvider = ({ children }) => {
 
   const calculateNoOfLectures = (course) => {
     let totalLectures = 0;
-    course.courseContent.forEach((chapter) => {
-      totalLectures += chapter.chapterContent.length;
-    });
+    if (course.courseContent && Array.isArray(course.courseContent)) {
+      course.courseContent.forEach((chapter) => {
+        if (chapter.chapterContent && Array.isArray(chapter.chapterContent)) {
+          totalLectures += chapter.chapterContent.length;
+        }
+      });
+    }
     return totalLectures;
   };
-
+  console.log("User Data:", userData);
   const formatLectureDuration = (minutes) => {
     const hours = Math.floor(minutes / 60);
     const mins = Math.floor(minutes % 60);
@@ -174,11 +179,6 @@ export const AppContextProvider = ({ children }) => {
     if (mins > 0) return `${mins}m ${secs}s`;
     return `${secs}s`;
   };
-
-  // Debug log enrolledCourses changes
-  useEffect(() => {
-    console.log("Enrolled courses updated:", enrolledCourses);
-  }, [enrolledCourses]);
 
   // Run when Clerk auth user changes
   useEffect(() => {

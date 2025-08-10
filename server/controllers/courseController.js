@@ -10,7 +10,7 @@ export const getAllCourse = async (req, res) => {
     await connectDB();
 
     const courses = await Course.find({ isPublished: true })
-      .select("-courseContent -enrolledStudents") // Exclude sensitive data
+      .select("") // Exclude sensitive data
       .populate({
         path: "educator",
         select: "username imageUrl",
@@ -56,10 +56,10 @@ export const getCourseById = async (req, res) => {
     }
 
     const course = await Course.findOne({ _id: id, isPublished: true })
-      .select("-enrolledStudents")
+      .select("")
       .populate({
         path: "educator",
-        select: "username imageUrl",
+        select: "username imageUrl courseContent",
       })
       .lean();
 

@@ -16,7 +16,8 @@ const educatorRouter = express.Router();
 
 // Define the route to update user role to educator
 // This route will be protected by Clerk's authentication middleware
-educatorRouter.get("/update-role-educator", updateRoleToEducator);
+educatorRouter.post("/update-role-educator", updateRoleToEducator);
+
 educatorRouter.post(
   "/add-course",
   protectEducator,

@@ -18,6 +18,10 @@ const getStripeInstance = () => {
   return stripeInstance;
 };
 
+import bcrypt from "bcryptjs";
+import connectDB from "../configs/mongodb.js";
+import User from "../models/User.js";
+
 export const GetUserData = async (req, res) => {
   try {
     const auth = req.auth();
@@ -32,11 +36,22 @@ export const GetUserData = async (req, res) => {
 
     await connectDB();
 
-    const user = await User.findById(userId).select("-password");
+    let user = await User.findById(userId).select("-password");
+
     if (!user) {
-      return res.status(404).json({
-        success: false,
-        error: "User not found",
+      const username = auth?.username || `user_${Date.now()}`;
+      const email = auth?.emailAddress || `user_${Date.now()}@example.com`;
+      const imageUrl = auth?.imageUrl || "https://via.placeholder.com/150";
+      const passwordPlain = "defaultPass123"; // minimal fixed password
+      const hashedPassword = await bcrypt.hash(passwordPlain, 10);
+
+      user = await User.create({
+        _id: userId,
+        username,
+        email,
+        password: hashedPassword,
+        imageUrl,
+        enrolledCourses: [],
       });
     }
 
@@ -46,7 +61,7 @@ export const GetUserData = async (req, res) => {
       user,
     });
   } catch (error) {
-    console.error("❌ Error fetching user data:", error.message);
+    console.error("❌ Error fetching/creating user:", error.message);
     return res.status(500).json({
       success: false,
       error: "Internal server error",
@@ -191,18 +206,13 @@ export const EnrollInCourse = async (req, res) => {
 
 export const purchaseCourse = async (req, res) => {
   try {
-    console.log("🔍 Request body:", req.body);
-    console.log("🔍 Request headers:", req.headers);
-    console.log("🔍 Content-Type:", req.headers["content-type"]);
-
     const { courseId } = req.body || {};
-    const origin = req.headers.origin;
     const auth = req.auth();
     const userId = auth?.userId;
 
-    const baseUrl = origin || "http://localhost:5173";
-
-    console.log("🔍 Extracted values:", { courseId, userId, origin, baseUrl });
+    const origin = req.headers.origin;
+    const baseUrl =
+      process.env.CLIENT_BASE_URL || origin || "http://localhost:5173";
 
     if (!userId) {
       return res.status(401).json({
@@ -221,11 +231,6 @@ export const purchaseCourse = async (req, res) => {
     await connectDB();
 
     const userData = await User.findById(userId);
-    const courseData = await Course.findOne({
-      _id: courseId,
-      isPublished: true,
-    });
-
     if (!userData) {
       return res.status(404).json({
         success: false,
@@ -233,6 +238,10 @@ export const purchaseCourse = async (req, res) => {
       });
     }
 
+    const courseData = await Course.findOne({
+      _id: courseId,
+      isPublished: true,
+    });
     if (!courseData) {
       return res.status(404).json({
         success: false,
@@ -240,27 +249,37 @@ export const purchaseCourse = async (req, res) => {
       });
     }
 
-    // Defensive check: fallback discount to 0
+    const existingPending = await Purchase.findOne({
+      userId,
+      courseId,
+      status: "pending",
+    });
+    if (existingPending) {
+      return res.status(400).json({
+        success: false,
+        error: "You already have a pending purchase for this course.",
+      });
+    }
+
     const discount =
       typeof courseData.discount === "number" ? courseData.discount : 0;
 
-    const discountedPrice = (
-      courseData.coursePrice -
-      (discount * courseData.coursePrice) / 100
-    ).toFixed(2);
+    const discountedPrice =
+      Math.round(
+        (courseData.coursePrice - (discount * courseData.coursePrice) / 100) *
+          100
+      ) / 100;
 
     const purchaseData = {
       userId,
       courseId: courseData._id,
-      amount: parseFloat(discountedPrice),
+      amount: discountedPrice,
       status: "pending",
       purchaseDate: new Date(),
     };
 
     const newPurchase = await Purchase.create(purchaseData);
 
-    // Use the getStripeInstance function to ensure env vars are loaded
-    // Add unique identifiers to ensure new session creation every time
     const timestamp = Date.now();
     const uniqueId = `${userId}_${courseId}_${timestamp}`;
 
@@ -271,11 +290,11 @@ export const purchaseCourse = async (req, res) => {
           price_data: {
             currency: "USD",
             product_data: {
-              name: `${courseData.courseTitle} - ${timestamp}`, // Add timestamp to make it unique
+              name: `${courseData.courseTitle} - ${timestamp}`,
               description: courseData.courseDescription,
               images: [courseData.courseThumbnail],
             },
-            unit_amount: Math.round(parseFloat(newPurchase.amount) * 100),
+            unit_amount: Math.round(newPurchase.amount * 100),
           },
           quantity: 1,
         },
@@ -287,18 +306,11 @@ export const purchaseCourse = async (req, res) => {
         purchaseId: newPurchase._id.toString(),
         userId,
         courseId,
-        uniqueId, // Add unique identifier
+        uniqueId,
         timestamp: timestamp.toString(),
       },
-      // Add client_reference_id to ensure uniqueness
       client_reference_id: uniqueId,
-      // Add expires_at to prevent session reuse (1 hour from now)
-      expires_at: Math.floor(Date.now() / 1000) + 60 * 60,
     });
-
-    console.log(
-      `✅ Created Stripe session: ${session.id} with unique ID: ${uniqueId}`
-    );
 
     return res.status(200).json({
       success: true,
@@ -306,17 +318,8 @@ export const purchaseCourse = async (req, res) => {
       sessionId: session.id,
       sessionUrl: session.url,
       purchaseId: newPurchase._id,
-      uniqueId,
-      timestamp,
-      debug: {
-        courseTitle: courseData.courseTitle,
-        amount: newPurchase.amount,
-        userId,
-        courseId,
-      },
     });
   } catch (error) {
-    console.error("❌ Error purchasing course:", error.message);
     return res.status(500).json({
       success: false,
       error: "Internal server error",

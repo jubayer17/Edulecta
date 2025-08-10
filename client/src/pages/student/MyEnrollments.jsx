@@ -1,6 +1,7 @@
-import React, { useContext } from "react";
+import React, { useContext, useEffect } from "react";
 import { AppContext } from "../../context/AppContext";
 import Footer from "../../components/student/Footer";
+import { toast } from "react-toastify";
 
 const MyEnrollments = () => {
   const {
@@ -54,6 +55,12 @@ const MyEnrollments = () => {
       return { text: "In Progress", color: "bg-yellow-100 text-yellow-700" };
     return { text: "Not Started", color: "bg-gray-100 text-gray-700" };
   };
+  useEffect(() => {
+    if (fullEnrolledCourses && fullEnrolledCourses.length === 0) {
+      toast.info("There is no enrolled course for this user.");
+      return;
+    }
+  }, [fullEnrolledCourses]);
 
   return (
     <>

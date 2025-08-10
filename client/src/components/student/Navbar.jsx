@@ -9,11 +9,11 @@ import {
   FiBook,
   FiUsers,
   FiBookOpen,
-  FiTrendingUp,
 } from "react-icons/fi";
 import { useClerk, useUser, UserButton } from "@clerk/clerk-react";
 import { AppContext } from "../../context/AppContext";
-import { AppContextProvider } from "../../context/AppContextProvider";
+import axios from "axios";
+import { toast } from "react-toastify";
 
 const Navbar = () => {
   const location = useLocation();
@@ -21,23 +21,63 @@ const Navbar = () => {
   const { openSignIn } = useClerk();
   const { user } = useUser();
   const [menuOpen, setMenuOpen] = useState(false);
-  const { navigate, isEducator } = useContext(AppContext);
+  const { navigate, isEducator, backendUrl, setIsEducator, getToken } =
+    useContext(AppContext);
+
+  const becomeEducator = async () => {
+    try {
+      if (isEducator) {
+        navigate("/educator");
+        return;
+      }
+      const token = await getToken();
+
+      if (!token) {
+        toast.error("Authentication token missing. Please sign in again.");
+        openSignIn();
+        return;
+      }
+
+      const { data } = await axios.post(
+        backendUrl + "/api/educator/update-role-educator",
+        null, // sending no body explicitly
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      if (data.success) {
+        setIsEducator(true);
+        toast.success("You are now an educator!");
+        navigate("/educator");
+      } else {
+        toast.error(data.message || "Failed to become educator");
+      }
+    } catch (error) {
+      console.error("Error becoming educator:", error);
+      // More detailed error message
+      const message =
+        error.response?.data?.message ||
+        error.message ||
+        "Error becoming educator";
+      toast.error(message);
+    }
+  };
 
   const navigationItems = [
     {
       label: "Browse Courses",
       path: "/course-list",
       icon: FiBook,
+      onClick: () => navigate("/course-list"),
     },
     {
       label: "My Enrollments",
       path: "/my-enrollments",
       icon: FiBookOpen,
-    },
-    {
-      label: isEducator ? "Educator Dashboard" : "Become Educator",
-      path: "/educator",
-      icon: FiUsers,
+      onClick: () => navigate("/my-enrollments"),
     },
   ];
 
@@ -67,11 +107,10 @@ const Navbar = () => {
           {navigationItems.map((item) => {
             const IconComponent = item.icon;
             const isActive = location.pathname === item.path;
-
             return (
-              <Link
+              <button
                 key={item.path}
-                to={item.path}
+                onClick={item.onClick}
                 className={`flex items-center gap-2 px-2 lg:px-3 py-1.5 lg:py-2 rounded-lg font-medium transition-all duration-200 ${
                   isActive
                     ? "bg-blue-600 text-white shadow-md"
@@ -80,9 +119,24 @@ const Navbar = () => {
               >
                 <IconComponent size={16} />
                 <span className="text-xs lg:text-sm">{item.label}</span>
-              </Link>
+              </button>
             );
           })}
+
+          {/* Educator Button */}
+          <button
+            onClick={becomeEducator}
+            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg font-medium transition-all duration-200 ${
+              location.pathname === "/educator"
+                ? "bg-blue-600 text-white shadow-md"
+                : "text-gray-600 hover:text-blue-600 hover:bg-blue-50"
+            }`}
+          >
+            <FiUsers size={16} />
+            <span className="text-xs lg:text-sm">
+              {isEducator ? "Educator Dashboard" : "Become Educator"}
+            </span>
+          </button>
         </div>
 
         {/* User Section */}
@@ -159,10 +213,12 @@ const Navbar = () => {
               const isActive = location.pathname === item.path;
 
               return (
-                <Link
+                <button
                   key={item.path}
-                  to={item.path}
-                  onClick={() => setMenuOpen(false)}
+                  onClick={() => {
+                    setMenuOpen(false);
+                    item.onClick();
+                  }}
                   className={`flex items-center gap-3 px-3 sm:px-4 py-2.5 sm:py-3 rounded-lg font-medium transition-all duration-200 mx-2 ${
                     isActive
                       ? "bg-blue-600 text-white shadow-md"
@@ -171,9 +227,27 @@ const Navbar = () => {
                 >
                   <IconComponent size={18} />
                   <span className="text-sm">{item.label}</span>
-                </Link>
+                </button>
               );
             })}
+
+            {/* Educator Button */}
+            <button
+              onClick={() => {
+                setMenuOpen(false);
+                becomeEducator();
+              }}
+              className={`flex items-center gap-3 px-3 sm:px-4 py-2.5 sm:py-3 rounded-lg font-medium transition-all duration-200 mx-2 ${
+                location.pathname === "/educator"
+                  ? "bg-blue-600 text-white shadow-md"
+                  : "text-gray-600 hover:text-blue-600 hover:bg-blue-50"
+              }`}
+            >
+              <FiUsers size={18} />
+              <span className="text-sm">
+                {isEducator ? "Educator Dashboard" : "Become Educator"}
+              </span>
+            </button>
 
             {/* Mobile User Info */}
             <div className="mt-3 sm:mt-4 pt-3 sm:pt-4 border-t border-gray-200 mx-2">
