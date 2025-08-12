@@ -9,14 +9,26 @@ export const getAllCourse = async (req, res) => {
   try {
     await connectDB();
 
-    const courses = await Course.find({ isPublished: true })
-      .select("") // Exclude sensitive data
+    // Get all courses without filtering
+    const courses = await Course.find()
+      .select(
+        "courseTitle courseDescription courseThumbnail coursePrice courseCategory isPublished discount courseContent courseRatings educator enrolledStudents createdAt updatedAt"
+      )
       .populate({
         path: "educator",
         select: "username imageUrl",
       })
       .sort({ createdAt: -1 })
       .lean();
+
+    console.log(
+      `Found ${courses.length} courses in database:`,
+      courses.map((c) => ({
+        id: c._id,
+        title: c.courseTitle,
+        isPublished: c.isPublished,
+      }))
+    );
 
     if (!courses || courses.length === 0) {
       return res.status(404).json({

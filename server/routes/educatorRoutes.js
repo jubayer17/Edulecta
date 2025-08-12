@@ -7,7 +7,7 @@ import {
   getEnrolledStudentsData,
   updateRoleToEducator,
 } from "../controllers/educatorController.js";
-import upload from "./../configs/multer.js";
+import upload, { handleMulterError } from "./../configs/multer.js";
 import { protectEducator } from "./../middlewares/authMiddleware.js";
 
 // Create a new router for educator routes
@@ -22,6 +22,7 @@ educatorRouter.post(
   "/add-course",
   protectEducator,
   upload.single("image"),
+  handleMulterError,
   AddCourse
 );
 educatorRouter.get("/get-courses", protectEducator, GetEducatorCourses);

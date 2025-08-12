@@ -23,14 +23,55 @@ export const AppContextProvider = ({ children }) => {
   const { user } = useUser();
 
   const fetchAllCourses = async () => {
+    console.log("🔄 Starting fetchAllCourses...");
     try {
-      const { data } = await axios.get(`${backendUrl}/api/course/all`);
+      // Clear any stale data first
+      setAllCourses([]);
+
+      const response = await axios.get(`${backendUrl}/api/course/all`);
+      console.log("📥 Raw API response status:", response.status);
+
+      const { data } = response;
       if (data.success) {
+        if (!Array.isArray(data.courses)) {
+          console.error("❌ Received courses is not an array:", data.courses);
+          return;
+        }
+
+        console.log("📊 Course counts:", {
+          total: data.courses.length,
+          published: data.courses.filter((c) => c.isPublished).length,
+          unpublished: data.courses.filter((c) => !c.isPublished).length,
+        });
+
+        console.log(
+          "📚 All courses:",
+          data.courses.map((c) => ({
+            id: c._id,
+            title: c.courseTitle,
+            isPublished: c.isPublished,
+            price: c.coursePrice,
+            educator: c.educator?.username || "No educator",
+          }))
+        );
+
         setAllCourses(data.courses);
+        console.log(
+          "✅ Courses state updated with",
+          data.courses.length,
+          "courses"
+        );
       } else {
+        console.error("❌ API reported failure:", data);
         toast.error(data.message || "Failed to fetch courses");
       }
     } catch (error) {
+      console.error("❌ Error in fetchAllCourses:", error);
+      console.error("Error details:", {
+        message: error.message,
+        response: error.response?.data,
+        status: error.response?.status,
+      });
       toast.error(error.response?.data?.message || "Failed to fetch courses");
     }
   };
@@ -66,6 +107,8 @@ export const AppContextProvider = ({ children }) => {
       return [];
     }
   };
+
+  console.log("Enrolled Courses:", enrolledCourses);
 
   //fetch user data and set enrolled courses only once here
   const fetchUserData = async () => {
@@ -180,21 +223,42 @@ export const AppContextProvider = ({ children }) => {
     return `${secs}s`;
   };
 
-  // Run when Clerk auth user changes
+  // console.log("User Enrolled Courses:", fullEnrolledCourses);
+  // Effect for initializing data and auto-refresh
   useEffect(() => {
-    if (user) {
-      fetchUserData(); // fetch backend user profile + enrolled courses once
-      fetchAllCourses();
-    } else {
-      // Clear state on logout
-      setEnrolledCourses([]);
-      setUsers(null);
-      setUserData(null);
-      setIsEducator(false);
-    }
+    let refreshInterval;
+
+    const initializeAndRefresh = async () => {
+      if (user) {
+        console.log("🚀 Initializing data...");
+
+        // Initial fetches
+        await fetchUserData();
+        await fetchAllCourses();
+
+        // Set up shorter refresh interval (every 10 seconds)
+        refreshInterval = setInterval(() => {
+          console.log("🔄 Auto-refreshing courses...");
+          fetchAllCourses();
+        }, 10000); // 10 seconds
+
+        console.log("⏰ Refresh interval set");
+      }
+    };
+
+    initializeAndRefresh();
+
+    // Cleanup function
+    return () => {
+      if (refreshInterval) {
+        console.log("🧹 Cleaning up refresh interval");
+        clearInterval(refreshInterval);
+      }
+    };
   }, [user]);
 
   const value = {
+    fetchUserEnrolledCourses,
     fullEnrolledCourses,
     users,
     setUsers,

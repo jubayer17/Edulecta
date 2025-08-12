@@ -13,13 +13,14 @@ import {
   updateUserCourseProgress,
   getUserCourseProgress,
   addCourseRating,
+  retryPayment,
 } from "../controllers/userController.js";
 import connectDB from "../configs/mongodb.js";
 
 const userRouter = express.Router();
 
-// Update user course status (protected route)
-userRouter.post("/get-course-progress/:courseId", getUserCourseProgress);
+// Get user course progress (protected route)
+userRouter.post("/get-course-progress", getUserCourseProgress);
 
 userRouter.post("/add-rating", addCourseRating);
 
@@ -27,6 +28,9 @@ userRouter.post("/update-course-progress", updateUserCourseProgress);
 
 // Get user data (protected route)
 userRouter.get("/profile", GetUserData);
+
+// Retry a payment (protected route)
+userRouter.post("/retry-payment/:purchaseId", retryPayment);
 
 // Get user enrolled courses (protected route)
 userRouter.get("/enrolled-courses", GetUserEnrolledCourses);
@@ -37,8 +41,8 @@ userRouter.post("/enroll", EnrollInCourse);
 // Purchase a course (protected route)
 userRouter.post("/purchase", purchaseCourse);
 
-// Cancel payment (public route - can be called from cancel URL)
-userRouter.post("/cancel-payment/:sessionId", cancelPayment);
+// Cancel payment (protected route)
+userRouter.post("/cancel-payment/:purchaseId", cancelPayment);
 
 // Get payment status (public route - for checking payment results)
 userRouter.get("/payment-status/:sessionId", getPaymentStatus);

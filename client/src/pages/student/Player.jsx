@@ -5,6 +5,8 @@ import YouTube from "react-youtube";
 import Footer from "../../components/student/Footer";
 import Rating from "../../components/student/Rating";
 import { FaCheckCircle, FaPlay, FaChevronDown } from "react-icons/fa";
+import axios from "axios";
+import { toast } from "react-toastify";
 
 const Player = () => {
   const { courseId } = useParams();
@@ -16,6 +18,10 @@ const Player = () => {
     calculateCourseDuration,
     calculateNoOfLectures,
     formatLectureDuration,
+    backendUrl,
+    getToken,
+    userData,
+    fullEnrolledCourses,
   } = useContext(AppContext);
 
   const [courseData, setCourseData] = useState(null);
@@ -330,23 +336,96 @@ const Player = () => {
                         </p>
                       </div>
                     </div>
-                    <button
-                      className="cursor-pointer bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors duration-200 font-medium text-sm lg:text-base flex-shrink-0"
-                      onClick={() => {
-                        if (playerData) {
-                          const lectureId = `${playerData.chapterNumber}-${playerData.lectureNumber}`;
-                          setCompletedLectures((prev) =>
-                            prev.includes(lectureId)
-                              ? prev
-                              : [...prev, lectureId]
-                          );
-                        }
-                        setPlayerData(null);
-                        setIsPlaying(false);
-                      }}
-                    >
-                      Mark as Completed
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        className={`px-4 py-2 rounded-lg transition-colors duration-200 font-medium text-sm flex items-center gap-2 ${
+                          playerData &&
+                          completedLectures.includes(
+                            `${playerData.chapterNumber}-${playerData.lectureNumber}`
+                          )
+                            ? "bg-green-500 hover:bg-green-600 text-white"
+                            : "bg-blue-500 hover:bg-blue-600 text-white"
+                        }`}
+                        onClick={async () => {
+                          if (playerData) {
+                            const lectureId = `${playerData.chapterNumber}-${playerData.lectureNumber}`;
+
+                            // If already completed, don't do anything
+                            if (completedLectures.includes(lectureId)) {
+                              toast.info("Lecture already completed!");
+                              return;
+                            }
+
+                            try {
+                              const token = await getToken();
+                              await axios.post(
+                                `${backendUrl}/api/user/update-course-progress`,
+                                {
+                                  courseId: courseId,
+                                  lectureId: lectureId,
+                                },
+                                {
+                                  headers: { Authorization: `Bearer ${token}` },
+                                }
+                              );
+
+                              // Update local state
+                              setCompletedLectures((prev) => [
+                                ...prev,
+                                lectureId,
+                              ]);
+
+                              // Update localStorage
+                              const updatedLectures = [
+                                ...completedLectures,
+                                lectureId,
+                              ];
+                              localStorage.setItem(
+                                `completedLectures_${courseId}`,
+                                JSON.stringify(updatedLectures)
+                              );
+
+                              // Trigger storage event for real-time updates
+                              window.dispatchEvent(
+                                new StorageEvent("storage", {
+                                  key: `completedLectures_${courseId}`,
+                                  newValue: JSON.stringify(updatedLectures),
+                                })
+                              );
+
+                              toast.success("Lecture marked as completed!");
+                            } catch (error) {
+                              console.error("Error updating progress:", error);
+                              toast.error("Failed to update progress");
+                            }
+                          }
+                        }}
+                      >
+                        {playerData &&
+                        completedLectures.includes(
+                          `${playerData.chapterNumber}-${playerData.lectureNumber}`
+                        ) ? (
+                          <>
+                            <FaCheckCircle className="text-white" size={16} />
+                            <span>Completed</span>
+                          </>
+                        ) : (
+                          "Mark as Completed"
+                        )}
+                      </button>
+                      <button
+                        className="px-4 py-2 rounded-lg bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium flex items-center gap-2"
+                        onClick={() => {
+                          if (playerRef.current) {
+                            playerRef.current.seekTo(0);
+                            playerRef.current.playVideo();
+                          }
+                        }}
+                      >
+                        <FaPlay className="text-white" size={14} />
+                        Play Again
+                      </button>
+                    </div>
                   </div>
                 </>
               ) : (

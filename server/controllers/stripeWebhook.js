@@ -26,18 +26,29 @@ export const handleStripeWebhook = async (req, res) => {
   const sig = req.headers["stripe-signature"];
   let event;
 
+  console.log("🔔 Received Stripe webhook");
+
+  if (!sig) {
+    console.error("❌ No Stripe signature found in headers");
+    return res.status(400).send("No Stripe signature found");
+  }
+
   try {
+    const endpointSecret = getEndpointSecret();
     event = getStripeInstance().webhooks.constructEvent(
       req.body,
       sig,
-      getEndpointSecret()
+      endpointSecret
     );
+    console.log(`✅ Webhook verified. Event type: ${event.type}`);
   } catch (err) {
+    console.error("❌ Webhook signature verification failed:", err.message);
     return res.status(400).send(`Webhook Error: ${err.message}`);
   }
 
   try {
     await connectDB();
+    console.log("✅ Connected to database");
 
     switch (event.type) {
       case "payment_intent.succeeded": {

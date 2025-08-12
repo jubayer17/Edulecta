@@ -6,6 +6,7 @@ import Home from "./pages/student/Home.jsx";
 import CoursesList from "./pages/student/CoursesList";
 import CourseDetails from "./pages/student/CourseDetails";
 import MyEnrollments from "./pages/student/MyEnrollments.jsx";
+import PendingPurchases from "./pages/student/PendingPurchases.jsx";
 import Player from "./pages/student/Player";
 import Loading from "./components/student/Loading";
 
@@ -35,6 +36,7 @@ const App = () => {
           <Route path="/course-list" element={<CoursesList />} />
           <Route path="/course-list/:input" element={<CoursesList />} />
           <Route path="/my-enrollments" element={<MyEnrollments />} />
+          <Route path="/pending-purchases" element={<PendingPurchases />} />
           <Route path="/course/:id" element={<CourseDetails />} />
           <Route path="/player/:courseId" element={<Player />} />
           <Route path="/loading/:path" element={<Loading />} />

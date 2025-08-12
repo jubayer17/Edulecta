@@ -1,60 +1,265 @@
-import React, { useContext, useEffect } from "react";
+import React, { useContext, useEffect, useState } from "react";
 import { AppContext } from "../../context/AppContext";
 import Footer from "../../components/student/Footer";
 import { toast } from "react-toastify";
+import axios from "axios";
 
 const MyEnrollments = () => {
   const {
     navigate,
-    fullEnrolledCourses, // <-- use fullEnrolledCourses here
+    fullEnrolledCourses,
     calculateCourseDuration,
-    calculateRating,
+    backendUrl,
+    getToken,
+    calculateNoOfLectures,
+    userData,
   } = useContext(AppContext);
 
-  // Function to calculate total lectures in a course
+  const [progressArray, setProgressArray] = React.useState([]);
+  console.log("Backend URL:", backendUrl);
+
+  // Function to get completed lectures from localStorage
+  // Get completed lectures from localStorage
+  const getLocalProgress = (courseId) => {
+    try {
+      const saved = localStorage.getItem(`completedLectures_${courseId}`);
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  };
+
+  // Calculate total lectures in a course
   const getTotalLectures = (course) => {
-    if (!course.courseContent || !Array.isArray(course.courseContent)) return 0;
+    return course.courseContent.reduce(
+      (total, chapter) => total + chapter.chapterContent.length,
+      0
+    );
+  };
 
-    return course.courseContent.reduce((total, chapter) => {
-      if (chapter.chapterContent && Array.isArray(chapter.chapterContent)) {
-        return total + chapter.chapterContent.length;
+  // New async function to fetch course progress dynamically
+  const getCourseProgress = async () => {
+    try {
+      console.log("Starting to fetch course progress...");
+      const token = await getToken();
+      console.log("Got token:", token ? "Token exists" : "No token");
+
+      if (!token) {
+        throw new Error("No authentication token available");
       }
-      return total;
-    }, 0);
+
+      if (!fullEnrolledCourses || fullEnrolledCourses.length === 0) {
+        console.log("No enrolled courses found");
+        return;
+      }
+
+      console.log("Fetching progress for courses:", fullEnrolledCourses.length);
+
+      const tempProgressArray = [];
+      // Process courses sequentially with a small delay between requests
+      for (const course of fullEnrolledCourses) {
+        if (tempProgressArray.length > 0) {
+          await new Promise((resolve) => setTimeout(resolve, 300));
+        }
+
+        try {
+          console.log(`Fetching progress for course: ${course._id}`);
+          const response = await axios.post(
+            `${backendUrl}/api/user/get-course-progress`,
+            { courseId: course._id },
+            {
+              headers: {
+                Authorization: `Bearer ${token}`,
+                "Content-Type": "application/json",
+              },
+            }
+          );
+
+          console.log(`API Response for ${course._id}:`, response.data);
+
+          // Get local progress
+          const localCompletedLectures = getLocalProgress(course._id);
+          console.log(
+            `Local progress for ${course._id}:`,
+            localCompletedLectures
+          );
+
+          // Ensure response.data.data exists
+          const serverCompletedLectures =
+            response.data?.data?.lectureCompleted || [];
+
+          // Combine backend and localStorage data
+          const completedLectureIds = new Set([
+            ...serverCompletedLectures,
+            ...localCompletedLectures,
+          ]);
+
+          const totalLectures = calculateNoOfLectures(course);
+          const lectureCompleted = completedLectureIds.size;
+          const progress = Math.round((lectureCompleted / totalLectures) * 100);
+
+          console.log(`Progress calculated for ${course._id}:`, {
+            totalLectures,
+            lectureCompleted,
+            progress,
+          });
+
+          tempProgressArray.push({
+            totalLectures,
+            lectureCompleted,
+            progress,
+            isCompleted: progress === 100,
+            completedLectureIds: Array.from(completedLectureIds),
+          });
+        } catch (courseError) {
+          console.error(
+            `Error fetching progress for course ${course._id}:`,
+            courseError
+          );
+          if (courseError.response?.status === 404) {
+            try {
+              // Initialize course progress
+              await axios.post(
+                `${backendUrl}/api/user/update-course-progress`,
+                {
+                  courseId: course._id,
+                  progress: 0,
+                  completed: false,
+                },
+                {
+                  headers: {
+                    Authorization: `Bearer ${token}`,
+                    "Content-Type": "application/json",
+                  },
+                }
+              );
+            } catch (initError) {
+              console.error("Error initializing course progress:", initError);
+            }
+          }
+
+          // Add a default progress entry for this course
+          tempProgressArray.push({
+            totalLectures: calculateNoOfLectures(course),
+            lectureCompleted: 0,
+            progress: 0,
+            isCompleted: false,
+            completedLectureIds: [],
+          });
+        }
+      }
+
+      console.log("Final progress array:", tempProgressArray);
+      setProgressArray(tempProgressArray);
+    } catch (error) {
+      console.error("Error in getCourseProgress:", error);
+      if (error.response) {
+        console.error("Response data:", error.response.data);
+        console.error("Response status:", error.response.status);
+        console.error("Response headers:", error.response.headers);
+      } else if (error.request) {
+        console.error("No response received:", error.request);
+      } else {
+        console.error("Error details:", error.message);
+      }
+      toast.error(
+        error.response?.data?.message ||
+          error.message ||
+          "Failed to fetch course progress"
+      );
+    }
   };
 
-  // Function to get completed lectures (for demo purposes, using simulated progress)
-  const getCompletedLectures = (course) => {
-    const totalLectures = getTotalLectures(course);
-    if (totalLectures === 0) return 0;
+  console.log("Progress Array:", progressArray);
 
-    // For demo purposes, simulate different completion levels based on course ID
-    const courseIndex = course._id ? parseInt(course._id.slice(-1)) || 0 : 0;
-    const progressLevels = [4, 2, 4, 3, 4, 1, 4, 3]; // Completed lectures per course
-    const completedLectures =
-      progressLevels[courseIndex % progressLevels.length] || 0;
+  // Listen for storage changes to update progress in real-time
+  useEffect(() => {
+    const handleStorageChange = (e) => {
+      // Check if the change is related to course progress
+      if (e.key && e.key.startsWith("completedLectures_")) {
+        getCourseProgress();
+      }
+    };
 
-    // Ensure completed doesn't exceed total
-    return Math.min(completedLectures, totalLectures);
-  };
+    window.addEventListener("storage", handleStorageChange);
+    return () => window.removeEventListener("storage", handleStorageChange);
+  }, []);
 
-  // Function to calculate completion percentage based on lectures
-  const getCompletionPercentage = (course) => {
-    const totalLectures = getTotalLectures(course);
-    const completedLectures = getCompletedLectures(course);
+  // Handle payment success/cancel from URL parameters
+  useEffect(() => {
+    const queryParams = new URLSearchParams(window.location.search);
+    const sessionId = queryParams.get("session_id");
+    const canceled = queryParams.get("canceled");
 
-    if (totalLectures === 0) return 0;
-    return Math.round((completedLectures / totalLectures) * 100);
-  };
+    if (sessionId) {
+      // Remove query params from URL
+      window.history.replaceState({}, "", "/my-enrollments");
 
-  // Function to get status based on completion
-  const getCourseStatus = (completionPercentage) => {
-    if (completionPercentage === 100)
-      return { text: "Completed", color: "bg-green-100 text-green-700" };
-    if (completionPercentage > 0)
-      return { text: "In Progress", color: "bg-yellow-100 text-yellow-700" };
-    return { text: "Not Started", color: "bg-gray-100 text-gray-700" };
-  };
+      toast.info("Verifying payment status...");
+      const verifyPayment = async () => {
+        try {
+          const token = await getToken();
+          const response = await axios.get(
+            `${backendUrl}/api/user/payment-status/${sessionId}`,
+            {
+              headers: {
+                Authorization: `Bearer ${token}`,
+                "Content-Type": "application/json",
+              },
+            }
+          );
+
+          if (response.data.success) {
+            toast.success("Payment completed successfully!");
+            // Remove pendingPurchaseId from localStorage
+            localStorage.removeItem("pendingPurchaseId");
+          } else {
+            toast.error(response.data.error || "Payment verification failed");
+          }
+
+          // Refresh purchases list
+          await fetchPendingPurchases();
+        } catch (error) {
+          console.error("Error verifying payment:", error);
+          toast.error("Failed to verify payment status");
+        }
+      };
+
+      verifyPayment();
+    } else if (canceled) {
+      // Remove query params from URL
+      window.history.replaceState({}, "", "/my-enrollments");
+
+      // Optionally handle cancellation if needed
+      toast.info("Payment was cancelled");
+    }
+  }, []);
+
+  useEffect(() => {
+    if (userData && fullEnrolledCourses?.length > 0) {
+      console.log("Fetching initial course progress...");
+      getCourseProgress();
+    }
+  }, [userData, fullEnrolledCourses]);
+
+  // Listen for localStorage changes
+  useEffect(() => {
+    const handleStorageChange = (e) => {
+      if (e.key && e.key.startsWith("completedLectures_")) {
+        console.log("Storage changed, updating progress...");
+        getCourseProgress();
+      }
+    };
+
+    // Add event listener
+    window.addEventListener("storage", handleStorageChange);
+
+    // Cleanup
+    return () => {
+      window.removeEventListener("storage", handleStorageChange);
+    };
+  }, []);
+
   useEffect(() => {
     if (fullEnrolledCourses && fullEnrolledCourses.length === 0) {
       toast.info("There is no enrolled course for this user.");
@@ -62,9 +267,35 @@ const MyEnrollments = () => {
     }
   }, [fullEnrolledCourses]);
 
+  // Helper to get completion percentage based on dynamic data
+  const getCompletionPercentage = (course, index) => {
+    if (!progressArray[index]) return 0;
+
+    // Get completed lectures from both localStorage and progress array
+    const localCompleted = getLocalProgress(course._id);
+    const serverCompleted = progressArray[index].completedLectureIds || [];
+
+    // Combine and deduplicate completed lectures
+    const allCompleted = new Set([...localCompleted, ...serverCompleted]);
+
+    // Get total lectures
+    const totalLectures = getTotalLectures(course);
+
+    if (totalLectures === 0) return 0;
+    return Math.round((allCompleted.size / totalLectures) * 100);
+  };
+
+  // Helper to get status based on completion percentage
+  const getCourseStatus = (completionPercentage) => {
+    if (completionPercentage === 100)
+      return { text: "Completed", color: "bg-green-100 text-green-700" };
+    if (completionPercentage > 0)
+      return { text: "In Progress", color: "bg-yellow-100 text-yellow-700" };
+    return { text: "Not Started", color: "bg-gray-100 text-gray-700" };
+  };
+
   return (
     <>
-      {console.log("Rendering MyEnrollments page...")}
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 py-4 md:py-8 lg:py-12">
         <div className="max-w-7xl mx-auto px-3 sm:px-4 md:px-6 lg:px-16">
           {/* Page Header */}
@@ -80,10 +311,14 @@ const MyEnrollments = () => {
           {/* Mobile Card View (visible on small screens) */}
           <div className="block md:hidden space-y-3 sm:space-y-4">
             {fullEnrolledCourses && fullEnrolledCourses.length > 0 ? (
-              fullEnrolledCourses.map((course) => {
-                const totalLectures = getTotalLectures(course);
-                const completedLectures = getCompletedLectures(course);
-                const completionPercentage = getCompletionPercentage(course);
+              fullEnrolledCourses.map((course, idx) => {
+                const totalLectures = progressArray[idx]?.totalLectures || 0;
+                const completedLectures =
+                  progressArray[idx]?.lectureCompleted || 0;
+                const completionPercentage = getCompletionPercentage(
+                  course,
+                  idx
+                );
                 const courseStatus = getCourseStatus(completionPercentage);
 
                 return (
@@ -159,7 +394,6 @@ const MyEnrollments = () => {
                 );
               })
             ) : (
-              /* Empty state for mobile */
               <div className="bg-white/90 backdrop-blur-sm rounded-xl shadow-lg border border-gray-200/50 p-4 sm:p-6">
                 <div className="flex flex-col items-center justify-center space-y-4 text-center">
                   <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
@@ -219,11 +453,22 @@ const MyEnrollments = () => {
                 </thead>
                 <tbody className="divide-y divide-gray-100">
                   {fullEnrolledCourses && fullEnrolledCourses.length > 0 ? (
-                    fullEnrolledCourses.map((course) => {
+                    fullEnrolledCourses.map((course, idx) => {
+                      // Get completed lectures from both sources
+                      const localCompleted = getLocalProgress(course._id);
+                      const serverCompleted =
+                        progressArray[idx]?.completedLectureIds || [];
+                      const allCompleted = new Set([
+                        ...localCompleted,
+                        ...serverCompleted,
+                      ]);
+
                       const totalLectures = getTotalLectures(course);
-                      const completedLectures = getCompletedLectures(course);
-                      const completionPercentage =
-                        getCompletionPercentage(course);
+                      const completedLectures = allCompleted.size;
+                      const completionPercentage = getCompletionPercentage(
+                        course,
+                        idx
+                      );
                       const courseStatus =
                         getCourseStatus(completionPercentage);
 
@@ -310,7 +555,6 @@ const MyEnrollments = () => {
                       );
                     })
                   ) : (
-                    /* Empty state for desktop */
                     <tr>
                       <td
                         colSpan="4"
@@ -357,7 +601,7 @@ const MyEnrollments = () => {
           </div>
         </div>
       </div>
-      {/* Footer with proper spacing */}
+      {/* Footer */}
       <div className="mt-8 md:mt-12">
         <Footer />
       </div>

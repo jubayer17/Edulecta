@@ -8,20 +8,70 @@ import { assets } from "../../assets/assets";
 import Footer from "../../components/student/Footer";
 
 const CoursesList = () => {
-  const { navigate, allCourses } = useContext(AppContext);
+  const { navigate, allCourses, fetchAllCourses, isEducator } =
+    useContext(AppContext);
   const { input } = useParams();
   const [sortOption, setSortOption] = useState("popular");
   const [filteredCourse, setFilteredCourse] = useState([]);
 
-  useEffect(() => {
-    if (!allCourses?.length) return;
+  console.log("Current user is educator:", isEducator);
 
-    let tempCourses = [...allCourses];
+  // Fetch courses when component mounts
+  useEffect(() => {
+    console.log("CoursesList mounted, fetching fresh data...");
+    fetchAllCourses();
+  }, []);
+
+  useEffect(() => {
+    console.log("\n📊 Course List Update:");
+    console.log("All Courses from Context:", allCourses);
+
+    if (!allCourses?.length) {
+      console.log("❌ No courses available");
+      return;
+    }
+
+    // Deep clone to avoid reference issues
+    let tempCourses = JSON.parse(JSON.stringify(allCourses));
+
+    console.log("Course Distribution:", {
+      total: tempCourses.length,
+      published: tempCourses.filter((c) => c.isPublished).length,
+      unpublished: tempCourses.filter((c) => !c.isPublished).length,
+    });
+
+    // Show all courses before filtering
+    console.log(
+      "All available courses:",
+      tempCourses.map((c) => ({
+        id: c._id,
+        title: c.courseTitle,
+        isPublished: c.isPublished,
+        price: c.coursePrice,
+      }))
+    );
+
+    // If user is not an educator, show only published courses
+    if (!isEducator) {
+      console.log("Filtering for published courses only (student view)");
+      tempCourses = tempCourses.filter((course) => course.isPublished);
+    } else {
+      console.log("Showing all courses (educator view)");
+    }
+    console.log(
+      "Courses after publish filter:",
+      tempCourses.map((c) => ({
+        id: c._id,
+        title: c.courseTitle,
+        isPublished: c.isPublished,
+      }))
+    );
 
     if (input) {
       tempCourses = tempCourses.filter((course) =>
         course.courseTitle.toLowerCase().includes(input.toLowerCase())
       );
+      console.log("After search filter:", tempCourses.length, "courses");
     }
 
     // Apply sorting
@@ -32,14 +82,19 @@ const CoursesList = () => {
         );
         break;
       case "priceLow":
-        tempCourses.sort((a, b) => a.price - b.price);
+        tempCourses.sort((a, b) => a.coursePrice - b.coursePrice);
         break;
       case "priceHigh":
-        tempCourses.sort((a, b) => b.price - a.price);
+        tempCourses.sort((a, b) => b.coursePrice - a.coursePrice);
         break;
       case "popular":
       default:
-        tempCourses.sort((a, b) => b.enrollmentCount - a.enrollmentCount);
+        // Sort by number of enrolled students
+        tempCourses.sort(
+          (a, b) =>
+            (b.enrolledStudents?.length || 0) -
+            (a.enrolledStudents?.length || 0)
+        );
         break;
     }
 

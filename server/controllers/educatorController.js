@@ -1,6 +1,6 @@
 import { clerkClient } from "@clerk/express";
 import connectDB from "../configs/mongodb.js";
-import { v2 as cloudinary } from "cloudinary";
+import { cloudinary } from "../configs/cloudinary.js";
 //update the user role to educator
 // This function updates the user's role to "educator" in Clerk and connects to the database
 export const updateRoleToEducator = async (req, res) => {
@@ -47,44 +47,210 @@ export const updateRoleToEducator = async (req, res) => {
 
 export const AddCourse = async (req, res) => {
   try {
+    console.log("📝 Starting course creation process...");
+    console.log("Request body:", req.body);
+    console.log("Request file:", req.file);
+
+    // 1. Validate request data
     const { courseData } = req.body;
-    const imgFile = req.file; // Assuming you're using multer for file uploads
+    const imgFile = req.file;
     const auth = req.auth();
     const { userId: educatorId } = auth || {};
 
+    console.log("Course Data received:", courseData);
+    console.log("Image File received:", imgFile ? "Yes" : "No");
+    console.log("Educator ID:", educatorId);
+
     if (!educatorId) {
-      return res.status(400).json({ error: "User authentication required" });
+      return res.status(401).json({
+        success: false,
+        error: "User authentication required",
+      });
     }
 
     if (!imgFile) {
-      return res.status(400).json({ error: "Image file is required" });
+      return res.status(400).json({
+        success: false,
+        error: "Course thumbnail image is required",
+      });
     }
 
-    const parseCourseData = JSON.parse(courseData);
-    parseCourseData.educator = educatorId;
+    if (!courseData) {
+      return res.status(400).json({
+        success: false,
+        error: "Course data is required",
+      });
+    }
 
-    // Connect to the database
+    // 2. Parse and validate course data
+    let parsedCourseData;
+    try {
+      parsedCourseData = JSON.parse(courseData);
+      console.log("✅ Course data parsed successfully:", parsedCourseData);
+
+      // Validate required fields
+      const requiredFields = [
+        "courseTitle",
+        "courseDescription",
+        "coursePrice",
+        "courseCategory",
+        "discount",
+      ];
+      const missingFields = requiredFields.filter(
+        (field) => !parsedCourseData[field]
+      );
+
+      if (missingFields.length > 0) {
+        return res.status(400).json({
+          success: false,
+          error: `Missing required fields: ${missingFields.join(", ")}`,
+        });
+      }
+
+      // Ensure courseContent is an array
+      if (
+        parsedCourseData.courseContent &&
+        !Array.isArray(parsedCourseData.courseContent)
+      ) {
+        return res.status(400).json({
+          success: false,
+          error: "courseContent must be an array",
+        });
+      }
+
+      // Initialize empty arrays
+      parsedCourseData.courseContent = Array.isArray(
+        parsedCourseData.courseContent
+      )
+        ? parsedCourseData.courseContent
+        : [];
+      // Explicitly set courseRatings as an empty array
+      parsedCourseData.courseRatings = [];
+      parsedCourseData.enrolledStudents = [];
+
+      console.log("Initialized arrays:", {
+        courseContent: parsedCourseData.courseContent,
+        courseRatings: parsedCourseData.courseRatings,
+        enrolledStudents: parsedCourseData.enrolledStudents,
+      });
+    } catch (parseError) {
+      console.error("❌ Error parsing course data:", parseError);
+      return res.status(400).json({
+        success: false,
+        error: "Invalid course data format",
+      });
+    }
+
+    // 3. Connect to database
     await connectDB();
     console.log("✅ Database connection successful");
-    // Import the Course model dynamically
-    const Course = (await import("../models/Course.js")).default;
-    // Create a new course instance
-    const newCourse = new Course({
-      ...parseCourseData,
+
+    // 4. Upload image to Cloudinary
+    console.log("📤 Preparing to upload image to Cloudinary...");
+    console.log("Image file details:", {
+      mimetype: imgFile.mimetype,
+      size: imgFile.size,
+      originalName: imgFile.originalname,
     });
-    const imgUpload = await cloudinary.uploader.upload(imgFile.path);
-    newCourse.courseThumbnail = imgUpload.secure_url; // Save the image URL from Cloudinary
-    // Save the new course to the database
-    console.log("📚 Saving new course to the database...");
+
+    let imgUpload;
+    try {
+      // Create a buffer from the file
+      const buffer = imgFile.buffer;
+
+      // Convert buffer to base64 string
+      const base64String = buffer.toString("base64");
+      const dataURI = `data:${imgFile.mimetype};base64,${base64String}`;
+
+      // Upload to Cloudinary
+      imgUpload = await new Promise((resolve, reject) => {
+        cloudinary.uploader.upload(
+          dataURI,
+          {
+            folder: "course-thumbnails",
+            resource_type: "auto",
+            timeout: 120000, // 2 minute timeout
+            transformation: [
+              { quality: "auto:good" }, // Automatic quality optimization
+              { fetch_format: "auto" }, // Automatic format selection
+            ],
+          },
+          (error, result) => {
+            if (error) {
+              console.error("Cloudinary upload error:", error);
+              reject(new Error(`Cloudinary upload failed: ${error.message}`));
+            } else {
+              console.log("Cloudinary upload successful:", result.secure_url);
+              resolve(result);
+            }
+          }
+        );
+      });
+
+      if (!imgUpload || !imgUpload.secure_url) {
+        throw new Error("Failed to get secure URL from Cloudinary");
+      }
+    } catch (cloudinaryError) {
+      console.error("Detailed Cloudinary error:", cloudinaryError);
+      throw new Error(`Image upload failed: ${cloudinaryError.message}`);
+    }
+
+    if (!imgUpload || !imgUpload.secure_url) {
+      console.error("❌ Failed to upload image to Cloudinary");
+      return res.status(500).json({
+        success: false,
+        error: "Failed to upload course thumbnail",
+      });
+    }
+
+    console.log("✅ Image uploaded successfully");
+
+    // 5. Create and save the course
+    const Course = (await import("../models/Course.js")).default;
+
+    // Prepare the final course data
+    const courseToCreate = {
+      ...parsedCourseData,
+      educator: educatorId,
+      courseThumbnail: imgUpload.secure_url,
+      isPublished: false,
+      courseContent: parsedCourseData.courseContent || [],
+      courseRatings: [], // Explicitly set empty array
+      enrolledStudents: [],
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+
+    // Remove any undefined or null values
+    Object.keys(courseToCreate).forEach((key) => {
+      if (courseToCreate[key] === undefined || courseToCreate[key] === null) {
+        delete courseToCreate[key];
+      }
+    });
+
+    console.log(
+      "Creating course with data:",
+      JSON.stringify(courseToCreate, null, 2)
+    );
+    const newCourse = new Course(courseToCreate);
+
+    console.log("📚 Saving course to database...");
     await newCourse.save();
 
-    // Return simple success response
+    // 6. Return success response
     return res.status(201).json({
+      success: true,
       message: "Course created successfully",
+      courseId: newCourse._id,
+      thumbnailUrl: imgUpload.secure_url,
     });
   } catch (error) {
-    console.error("❌ Error in AddCourse:", error.message);
-    return res.status(500).json({ error: "Internal server error" });
+    console.error("❌ Error in AddCourse:", error);
+    return res.status(500).json({
+      success: false,
+      error: error.message || "Failed to create course",
+      details: process.env.NODE_ENV === "development" ? error.stack : undefined,
+    });
   }
 };
 
@@ -109,7 +275,9 @@ export const GetEducatorCourses = async (req, res) => {
     const courses = await Course.find({ educator: educatorId });
 
     return res.status(200).json({
+      success: true,
       message: "Courses fetched successfully",
+      courses: courses,
     });
   } catch (error) {
     console.error("❌ Error fetching educator courses:", error.message);

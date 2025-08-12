@@ -9,6 +9,7 @@ import {
   FiBook,
   FiUsers,
   FiBookOpen,
+  FiClock,
 } from "react-icons/fi";
 import { useClerk, useUser, UserButton } from "@clerk/clerk-react";
 import { AppContext } from "../../context/AppContext";
@@ -78,6 +79,12 @@ const Navbar = () => {
       path: "/my-enrollments",
       icon: FiBookOpen,
       onClick: () => navigate("/my-enrollments"),
+    },
+    {
+      label: "Pending Purchases",
+      path: "/pending-purchases",
+      icon: FiClock,
+      onClick: () => navigate("/pending-purchases"),
     },
   ];
 

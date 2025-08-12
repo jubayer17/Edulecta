@@ -22,31 +22,49 @@ dotenv.config({ path: path.join(__dirname, ".env") });
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// CORS & Clerk
-app.use(cors());
-app.use(clerkMiddleware());
+// Configure middleware (including CORS, body parsing, and Clerk)
+import { configureMiddleware } from "./middlewares/configureMiddleware.js";
+configureMiddleware(app);
 
-// Match the raw body to content type application/json for webhooks (BEFORE express.json())
-app.post("/clerk", express.raw({ type: "application/json" }), (req, res) => {
+// Handle Clerk webhook
+app.post("/clerk", (req, res) => {
   console.log("🔔 Clerk webhook received");
   try {
-    req.rawBody = req.body.toString("utf8");
-    req.body = JSON.parse(req.rawBody);
-    return handleClerkWebhook(req, res);
+    const rawBody = req.body.toString("utf8");
+    const parsedBody = JSON.parse(rawBody);
+    return handleClerkWebhook({ ...req, rawBody, body: parsedBody }, res);
   } catch (error) {
     console.error("Error parsing webhook body:", error);
     return res.status(400).json({ error: "Invalid JSON" });
   }
 });
 
-// Match the raw body to content type application/json for Stripe webhook
-app.post("/stripe", express.raw({ type: "application/json" }), (req, res) => {
-  console.log("🔔 Stripe webhook received");
-  return handleStripeWebhook(req, res);
-});
+// Handle Stripe webhook
+app.post("/stripe", async (req, res) => {
+  try {
+    console.log("🔔 Stripe webhook received");
+    const contentType = req.headers["content-type"];
 
-// JSON parser for all other routes (AFTER webhook routes)
-app.use(express.json());
+    if (!contentType || !contentType.includes("application/json")) {
+      console.error("❌ Invalid content type:", contentType);
+      return res.status(400).json({ error: "Invalid content type" });
+    }
+
+    if (!req.body || Object.keys(req.body).length === 0) {
+      console.error("❌ Empty webhook body");
+      return res.status(400).json({ error: "Empty webhook body" });
+    }
+
+    return await handleStripeWebhook(req, res);
+  } catch (error) {
+    console.error("❌ Error processing Stripe webhook:", error);
+    return res.status(500).json({
+      error: "Internal server error processing webhook",
+      message:
+        process.env.NODE_ENV === "development" ? error.message : undefined,
+    });
+  }
+});
 
 // Init DB & Cloudinary (lazy for serverless)
 let isInitialized = false;

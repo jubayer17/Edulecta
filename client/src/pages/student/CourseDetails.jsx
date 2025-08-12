@@ -24,6 +24,7 @@ const CourseDetails = () => {
   const [courseData, setCourseData] = useState(null);
   const [playerData, setPlayerData] = useState(null);
   const [isAlreadyEnrolled, setIsAlreadyEnrolled] = useState(false);
+  const [isPendingPurchase, setIsPendingPurchase] = useState(false);
   const [playerRef, setPlayerRef] = useState(null);
   const [expandedChapters, setExpandedChapters] = useState({
     0: true, // First chapter open by default
@@ -93,12 +94,15 @@ const CourseDetails = () => {
 
       const token = await getToken();
 
+      console.log("Sending purchase request for course:", courseData._id);
+
       const { data } = await axios.post(
-        backendUrl + "/api/user/purchase",
+        `${backendUrl}/api/user/purchase`,
         { courseId: courseData._id },
         {
           headers: {
             Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
           },
         }
       );
@@ -110,8 +114,28 @@ const CourseDetails = () => {
         toast.error(data.error || "Failed to start enrollment process");
       }
     } catch (error) {
-      toast.error("Something went wrong. Please try again.");
-      console.error(error.message);
+      const errorData = error.response?.data;
+      console.error("Error details:", errorData || error.message);
+
+      if (
+        errorData?.error ===
+        "You already have a pending purchase for this course."
+      ) {
+        setIsPendingPurchase(true);
+        toast.warn(
+          "You have a pending purchase for this course. Would you like to continue with your payment?",
+          {
+            autoClose: 10000, // Keep the message visible longer
+            onClick: () => (window.location.href = "/my-enrollments"), // Redirect to enrollments page when clicked
+          }
+        );
+      } else {
+        const errorMessage =
+          errorData?.error ||
+          error.message ||
+          "Something went wrong. Please try again.";
+        toast.error(errorMessage);
+      }
     }
   };
 
@@ -626,12 +650,16 @@ const CourseDetails = () => {
     rounded-xl transition-all duration-300 transform hover:scale-105 hover:shadow-xl 
     active:scale-95 text-sm md:text-base
     ${
-      isAlreadyEnrolled
+      isAlreadyEnrolled || isPendingPurchase
         ? "opacity-60 cursor-not-allowed hover:scale-100 hover:shadow-none"
         : ""
     }`}
                 >
-                  {isAlreadyEnrolled ? "Already Enrolled" : "Enroll Now"}
+                  {isAlreadyEnrolled
+                    ? "Already Enrolled"
+                    : isPendingPurchase
+                    ? "Pending Purchase"
+                    : "Enroll Now"}
                 </button>
 
                 <div className="grid grid-cols-2 gap-3 md:flex md:flex-col md:space-y-3 md:gap-0">

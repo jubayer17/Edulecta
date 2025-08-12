@@ -232,18 +232,40 @@ export const purchaseCourse = async (req, res) => {
       });
     }
 
-    const existingPending = await Purchase.findOne({
+    // Check for any existing pending/incomplete purchases
+    const existingPurchase = await Purchase.findOne({
       userId,
       courseId,
-      status: "pending",
+      status: { $in: ["pending", "incomplete"] },
     });
-    if (existingPending) {
-      return res.status(400).json({
-        success: false,
-        error: "You already have a pending purchase for this course.",
-      });
+
+    // If there's an existing purchase with a valid session, return that session
+    if (existingPurchase?.stripeSessionId) {
+      try {
+        const stripe = getStripeInstance();
+        const existingSession = await stripe.checkout.sessions.retrieve(
+          existingPurchase.stripeSessionId
+        );
+
+        if (
+          existingSession.status === "open" ||
+          existingSession.status === "incomplete"
+        ) {
+          return res.status(200).json({
+            success: true,
+            message: "Returning existing payment session",
+            sessionId: existingSession.id,
+            sessionUrl: existingSession.url,
+            purchaseId: existingPurchase._id,
+          });
+        }
+      } catch (stripeError) {
+        // If session retrieval fails, we'll create a new one below
+        console.error("Failed to retrieve existing session:", stripeError);
+      }
     }
 
+    // Calculate discounted price
     const discount =
       typeof courseData.discount === "number" ? courseData.discount : 0;
 
@@ -253,56 +275,70 @@ export const purchaseCourse = async (req, res) => {
           100
       ) / 100;
 
+    // Create or update purchase record
+    const timestamp = Date.now();
     const purchaseData = {
       userId,
       courseId: courseData._id,
       amount: discountedPrice,
       status: "pending",
       purchaseDate: new Date(),
+      lastUpdated: new Date(),
     };
 
-    const newPurchase = await Purchase.create(purchaseData);
+    const purchase = existingPurchase || (await Purchase.create(purchaseData));
 
-    const timestamp = Date.now();
-    const uniqueId = `${userId}_${courseId}_${timestamp}`;
-
-    const session = await getStripeInstance().checkout.sessions.create({
+    // Create new Stripe session
+    const stripe = getStripeInstance();
+    const session = await stripe.checkout.sessions.create({
       payment_method_types: ["card"],
       line_items: [
         {
           price_data: {
             currency: "USD",
             product_data: {
-              name: `${courseData.courseTitle} - ${timestamp}`,
-              description: courseData.courseDescription,
-              images: [courseData.courseThumbnail],
+              name: courseData.courseTitle,
+              description: courseData.courseDescription || "Course purchase",
+              images: courseData.courseThumbnail
+                ? [courseData.courseThumbnail]
+                : undefined,
             },
-            unit_amount: Math.round(newPurchase.amount * 100),
+            unit_amount: Math.round(purchase.amount * 100), // Stripe expects amount in cents
           },
           quantity: 1,
         },
       ],
       mode: "payment",
-      success_url: `${baseUrl}/success?session_id={CHECKOUT_SESSION_ID}&purchase_id=${newPurchase._id}`,
-      cancel_url: `${baseUrl}/cancel?session_id={CHECKOUT_SESSION_ID}&purchase_id=${newPurchase._id}`,
+      success_url: `${baseUrl}/my-enrollments?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${baseUrl}/my-enrollments?canceled=true`,
+      customer_email: userData.email, // Pre-fill customer email if available
       metadata: {
-        purchaseId: newPurchase._id.toString(),
-        userId,
-        courseId,
-        uniqueId,
+        purchaseId: purchase._id.toString(),
+        userId: userId.toString(),
+        courseId: courseId.toString(),
         timestamp: timestamp.toString(),
       },
-      client_reference_id: uniqueId,
+      expires_at: Math.floor(Date.now() / 1000) + 60 * 30, // Session expires in 30 minutes
     });
+
+    // Update purchase with new session ID
+    purchase.stripeSessionId = session.id;
+    purchase.lastUpdated = new Date();
+    await purchase.save();
+
+    console.log(
+      `Created Stripe session ${session.id} for purchase ${purchase._id}`
+    );
 
     return res.status(200).json({
       success: true,
       message: "Payment session created successfully",
       sessionId: session.id,
       sessionUrl: session.url,
-      purchaseId: newPurchase._id,
+      purchaseId: purchase._id,
     });
   } catch (error) {
+    console.error("Error creating purchase:", error);
     return res.status(500).json({
       success: false,
       error: "Internal server error",
@@ -314,36 +350,28 @@ export const purchaseCourse = async (req, res) => {
 // Handle payment cancellation
 export const cancelPayment = async (req, res) => {
   try {
-    const { sessionId } = req.params;
+    const auth = req.auth();
+    const userId = auth?.userId;
+    const { purchaseId } = req.params;
 
-    if (!sessionId) {
-      return res.status(400).json({
+    if (!userId) {
+      return res.status(401).json({
         success: false,
-        error: "Session ID is required",
+        error: "User authentication required",
       });
     }
 
-    // Retrieve the session from Stripe to get metadata
-    const session = await getStripeInstance().checkout.sessions.retrieve(
-      sessionId
-    );
-
-    if (!session.metadata?.purchaseId) {
+    if (!purchaseId) {
       return res.status(400).json({
         success: false,
-        error: "Purchase ID not found in session",
+        error: "Purchase ID is required",
       });
     }
 
-    // Update purchase status to failed
-    const purchase = await Purchase.findByIdAndUpdate(
-      session.metadata.purchaseId,
-      {
-        status: "failed",
-        stripeSessionId: sessionId,
-      },
-      { new: true }
-    );
+    await connectDB();
+
+    // Find the purchase
+    const purchase = await Purchase.findById(purchaseId);
 
     if (!purchase) {
       return res.status(404).json({
@@ -352,16 +380,70 @@ export const cancelPayment = async (req, res) => {
       });
     }
 
+    // Verify user owns this purchase
+    if (purchase.userId.toString() !== userId) {
+      return res.status(403).json({
+        success: false,
+        error: "Not authorized to cancel this purchase",
+      });
+    }
+
+    // Only allow cancellation of pending/incomplete/failed purchases
+    if (!["pending", "incomplete", "failed"].includes(purchase.status)) {
+      return res.status(400).json({
+        success: false,
+        error: `Cannot cancel purchase with status: ${purchase.status}`,
+      });
+    }
+
+    // If there's a Stripe session, try to retrieve and expire it
+    if (purchase.stripeSessionId) {
+      const stripe = getStripeInstance();
+      try {
+        // First try to retrieve the session to make sure it exists
+        const session = await stripe.checkout.sessions.retrieve(
+          purchase.stripeSessionId
+        );
+
+        if (session.status === "open" || session.status === "incomplete") {
+          // Only expire if the session is still active
+          await stripe.checkout.sessions.expire(purchase.stripeSessionId);
+          console.log(
+            `✅ Successfully expired Stripe session: ${purchase.stripeSessionId}`
+          );
+        } else {
+          console.log(
+            `ℹ️ Session ${purchase.stripeSessionId} already ${session.status}`
+          );
+        }
+      } catch (stripeError) {
+        if (stripeError.code === "resource_missing") {
+          console.log(
+            `ℹ️ Stripe session ${purchase.stripeSessionId} not found`
+          );
+        } else {
+          console.error("❌ Error handling Stripe session:", stripeError);
+        }
+        // Continue even if Stripe session handling fails
+      }
+    }
+
+    // Update purchase record
+    purchase.status = "cancelled";
+    purchase.lastUpdated = new Date();
+    purchase.stripeSessionId = null; // Clear the session ID since it's no longer valid
+    await purchase.save();
+
     console.log(`🚫 Payment cancelled for purchase: ${purchase._id}`);
 
     return res.status(200).json({
       success: true,
-      message: "Payment cancelled successfully",
+      message: "Purchase cancelled successfully",
       purchaseId: purchase._id,
       status: purchase.status,
     });
   } catch (error) {
-    console.error("❌ Error cancelling payment:", error.message);
+    console.error("❌ Error cancelling payment:", error);
     return res.status(500).json({
       success: false,
       error: "Internal server error",
@@ -408,6 +490,181 @@ export const getPaymentStatus = async (req, res) => {
       success: false,
       error: "Internal server error",
       message: error.message,
+    });
+  }
+};
+
+// Retry a failed or pending payment
+export const retryPayment = async (req, res) => {
+  try {
+    // 1. Authentication & Input Validation
+    const { purchaseId } = req.params;
+    const auth = req.auth();
+    const userId = auth?.userId;
+
+    if (!userId) {
+      console.log("❌ Authentication required");
+      return res.status(401).json({
+        success: false,
+        error: "User authentication required",
+      });
+    }
+
+    if (!purchaseId || !mongoose.Types.ObjectId.isValid(purchaseId)) {
+      console.log("❌ Invalid purchase ID:", purchaseId);
+      return res.status(400).json({
+        success: false,
+        error: "Valid purchase ID is required",
+      });
+    }
+
+    // 2. Database Connection
+    console.log("📡 Connecting to database...");
+    await connectDB();
+
+    // 3. Find and Validate Purchase
+    console.log(`🔍 Finding purchase: ${purchaseId}`);
+    const purchase = await Purchase.findById(purchaseId)
+      .populate("courseId")
+      .populate("userId");
+
+    if (!purchase) {
+      console.log("❌ Purchase not found");
+      return res.status(404).json({
+        success: false,
+        error: "Purchase not found",
+      });
+    }
+
+    // 4. Authorization Check
+    if (purchase.userId._id.toString() !== userId) {
+      console.log(
+        `❌ Unauthorized: User ${userId} attempted to access purchase ${purchaseId}`
+      );
+      return res.status(403).json({
+        success: false,
+        error: "Not authorized to retry this payment",
+      });
+    }
+
+    // 5. Status Validation
+    if (
+      !["pending", "failed", "incomplete", "expired"].includes(purchase.status)
+    ) {
+      console.log(`❌ Invalid status for retry: ${purchase.status}`);
+      return res.status(400).json({
+        success: false,
+        error: `Cannot retry payment with status: ${purchase.status}`,
+      });
+    }
+
+    // 6. Course Validation
+    if (!purchase.courseId) {
+      console.log("❌ Course data missing from purchase");
+      return res.status(400).json({
+        success: false,
+        error: "Course information not found",
+      });
+    }
+
+    // 7. Handle Existing Session
+    if (purchase.stripeSessionId) {
+      try {
+        console.log(
+          `🔄 Attempting to expire old session: ${purchase.stripeSessionId}`
+        );
+        const stripe = getStripeInstance();
+        await stripe.checkout.sessions.expire(purchase.stripeSessionId);
+        console.log("✅ Old session expired successfully");
+      } catch (error) {
+        if (error.code === "resource_missing") {
+          console.log("ℹ️ Old session not found, continuing...");
+        } else {
+          console.error("⚠️ Error expiring old session:", error);
+        }
+      }
+    }
+
+    // 8. Create New Session
+    console.log("🔄 Creating new Stripe session...");
+    const origin = req.headers.origin;
+    const baseUrl =
+      process.env.CLIENT_BASE_URL || origin || "http://localhost:5173";
+    const timestamp = Date.now();
+
+    const stripe = getStripeInstance();
+
+    try {
+      const session = await stripe.checkout.sessions.create({
+        payment_method_types: ["card"],
+        line_items: [
+          {
+            price_data: {
+              currency: "USD",
+              product_data: {
+                name: purchase.courseId.courseTitle,
+                description:
+                  purchase.courseId.courseDescription || "Course purchase",
+                images: purchase.courseId.courseThumbnail
+                  ? [purchase.courseId.courseThumbnail]
+                  : undefined,
+              },
+              unit_amount: Math.round(purchase.amount * 100),
+            },
+            quantity: 1,
+          },
+        ],
+        mode: "payment",
+        success_url: `${baseUrl}/my-enrollments?session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: `${baseUrl}/my-enrollments?canceled=true`,
+        customer_email: purchase.userId.email,
+        metadata: {
+          purchaseId: purchase._id.toString(),
+          userId: userId.toString(),
+          courseId: purchase.courseId._id.toString(),
+          timestamp: timestamp.toString(),
+        },
+        expires_at: Math.floor(Date.now() / 1000) + 60 * 30,
+      });
+
+      // 9. Update Purchase Record
+      purchase.stripeSessionId = session.id;
+      purchase.lastUpdated = new Date();
+      purchase.status = "pending";
+      await purchase.save();
+
+      console.log(
+        `✅ Created new Stripe session ${session.id} for purchase ${purchase._id}`
+      );
+
+      return res.status(200).json({
+        success: true,
+        message: "New payment session created successfully",
+        sessionId: session.id,
+        sessionUrl: session.url,
+      });
+    } catch (stripeError) {
+      console.error("❌ Stripe error:", stripeError);
+      return res.status(400).json({
+        success: false,
+        error: stripeError.message || "Failed to create payment session",
+      });
+    }
+  } catch (error) {
+    console.error("❌ Error retrying payment:", error);
+    // Check if it's a Stripe error
+    if (error.type && error.type.startsWith("Stripe")) {
+      return res.status(400).json({
+        success: false,
+        error: "Payment service error",
+        message: error.message,
+      });
+    }
+    // Generic error handler
+    return res.status(500).json({
+      success: false,
+      error: "Internal server error",
+      message: "An unexpected error occurred. Please try again later.",
     });
   }
 };
@@ -829,17 +1086,40 @@ export const updateUserCourseProgress = async (req, res) => {
     const userId = req.auth().userId;
     const { courseId, lectureId } = req.body;
 
-    if (!courseId || !lectureId) {
+    if (!courseId) {
       return res
         .status(400)
-        .json({ success: false, message: "Missing courseId or lectureId" });
+        .json({ success: false, message: "Missing courseId" });
     }
 
+    // Find existing progress for user + course
     let courseProgress = await CourseProgress.findOne({ userId, courseId });
 
-    if (courseProgress) {
+    // If not found, create new progress document
+    if (!courseProgress) {
+      courseProgress = new CourseProgress({
+        userId,
+        courseId,
+        lectureCompleted: [],
+        progress: 0,
+        completed: false,
+        lastAccessed: new Date(),
+      });
+      await courseProgress.save();
+    }
+
+    // If lectureId provided, update progress
+    if (lectureId) {
       if (!courseProgress.lectureCompleted.includes(lectureId)) {
         courseProgress.lectureCompleted.push(lectureId);
+        courseProgress.lastAccessed = new Date();
+
+        // Optional: update progress percentage or completed status here
+        // For example:
+        // const totalLectures = 10; // get this from course data ideally
+        // courseProgress.progress = Math.min(100, (courseProgress.lectureCompleted.length / totalLectures) * 100);
+        // courseProgress.completed = courseProgress.progress === 100;
+
         await courseProgress.save();
       } else {
         return res.status(200).json({
@@ -848,18 +1128,12 @@ export const updateUserCourseProgress = async (req, res) => {
           data: courseProgress,
         });
       }
-    } else {
-      courseProgress = await CourseProgress.create({
-        userId,
-        courseId,
-        lectureCompleted: [lectureId],
-        progress: 0,
-      });
     }
 
+    // Return progress whether updated or just fetched
     return res.status(200).json({
       success: true,
-      message: "Course progress updated successfully",
+      message: "Course progress retrieved successfully",
       data: courseProgress,
     });
   } catch (error) {
@@ -876,7 +1150,7 @@ export const getUserCourseProgress = async (req, res) => {
     }
 
     const userId = req.auth().userId;
-    const { courseId } = req.params;
+    const { courseId } = req.body;
 
     if (!courseId) {
       return res
@@ -884,12 +1158,18 @@ export const getUserCourseProgress = async (req, res) => {
         .json({ success: false, message: "Missing courseId" });
     }
 
-    const courseProgress = await CourseProgress.findOne({ userId, courseId });
+    let courseProgress = await CourseProgress.findOne({ userId, courseId });
 
     if (!courseProgress) {
-      return res
-        .status(404)
-        .json({ success: false, message: "No progress found" });
+      courseProgress = new CourseProgress({
+        userId,
+        courseId,
+        completed: false,
+        lectureCompleted: [],
+        progress: 0,
+        lastAccessed: new Date(),
+      });
+      await courseProgress.save();
     }
 
     return res.status(200).json({
