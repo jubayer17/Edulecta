@@ -15,7 +15,8 @@ export const AppContextProvider = ({ children }) => {
   const [enrolledCourses, setEnrolledCourses] = useState([]); // likely course IDs or partial
   const [userData, setUserData] = useState(null);
 
-  const backendUrl = import.meta.env.VITE_BACKEND_URL;
+  const backendUrl =
+    import.meta.env.VITE_BACKEND_URL || "https://server-phi-rust.vercel.app";
   const currency = import.meta.env.VITE_CURRENCY;
   const navigate = useNavigate();
 
