@@ -432,3 +432,44 @@ export const getEnrolledStudentsData = async (req, res) => {
     return res.status(500).json({ error: "Internal server error" });
   }
 };
+
+// Update educator dashboard totals in User collection
+export const updateEducatorDashboard = async (req, res) => {
+  try {
+    const auth = req.auth();
+    const { userId: educatorId } = auth || {};
+
+    if (!educatorId) {
+      return res.status(400).json({ error: "User authentication required" });
+    }
+
+    const { totalCourses, totalEnrollments, totalEarnings } = req.body;
+
+    await connectDB();
+
+    const User = (await import("../models/User.js")).default;
+
+    const updatedUser = await User.findByIdAndUpdate(
+      educatorId,
+      {
+        ...(totalCourses !== undefined && { totalCourses }),
+        ...(totalEnrollments !== undefined && { totalEnrollments }),
+        ...(totalEarnings !== undefined && { totalEarnings }),
+      },
+      { new: true } // return the updated document
+    );
+
+    if (!updatedUser) {
+      return res.status(404).json({ error: "Educator not found" });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Educator dashboard updated successfully",
+      data: updatedUser,
+    });
+  } catch (error) {
+    console.error("❌ Error updating educator dashboard:", error);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+};

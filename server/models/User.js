@@ -20,6 +20,10 @@ const userSchema = new mongoose.Schema({
     lowercase: true,
     match: [/.+\@.+\..+/, "Please fill a valid email address"],
   },
+  isEducator: {
+    type: Boolean,
+    default: false,
+  },
   password: {
     type: String,
     required: true,
