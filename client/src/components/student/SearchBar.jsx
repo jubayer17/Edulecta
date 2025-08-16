@@ -78,12 +78,12 @@ const SearchBar = () => {
   };
 
   return (
-    <div className="relative w-full max-w-lg">
+    <div className="relative w-full max-w-lg mx-auto">
       {/* Background matching Hero section */}
       <div className="absolute -inset-4 bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 rounded-3xl opacity-60"></div>
 
       {/* Search Form */}
-      <form onSubmit={onSearch} className="relative z-10">
+      <form onSubmit={onSearch} className="relative z-10 px-2 sm:px-0">
         <div
           className={`relative transition-all duration-500 ease-out ${
             isFocused
@@ -100,8 +100,8 @@ const SearchBar = () => {
             onFocus={() => setIsFocused(true)}
             onBlur={() => setTimeout(() => setIsFocused(false), 200)}
             placeholder="Search for courses, topics, or skills..."
-            className={`w-full bg-white/90 backdrop-blur-sm border-2 rounded-full px-6 py-4 pl-14 pr-16 
-              text-gray-800 placeholder-gray-500 transition-all duration-500 ease-out
+            className={`w-full bg-white/90 backdrop-blur-sm border-2 rounded-full px-4 sm:px-6 py-3 sm:py-4 pl-12 sm:pl-14 pr-14 sm:pr-16 
+              text-gray-800 placeholder-gray-500 transition-all duration-500 ease-out text-sm sm:text-base
               focus:outline-none focus:border-blue-400 focus:bg-white/95 focus:shadow-inner
               ${
                 isFocused
@@ -114,12 +114,12 @@ const SearchBar = () => {
 
           {/* Floating Search Icon */}
           <div
-            className={`absolute inset-y-0 left-0 pl-5 flex items-center pointer-events-none transition-all duration-500 ${
+            className={`absolute inset-y-0 left-0 pl-3 sm:pl-5 flex items-center pointer-events-none transition-all duration-500 ${
               isFocused ? "animate-float-icon" : ""
             }`}
           >
             <FiSearch
-              className={`w-5 h-5 transition-all duration-500 ${
+              className={`w-4 h-4 sm:w-5 sm:h-5 transition-all duration-500 ${
                 isFocused ? "text-blue-600 scale-110" : "text-gray-500"
               }`}
             />
@@ -130,9 +130,9 @@ const SearchBar = () => {
             <button
               type="button"
               onClick={onClear}
-              className="absolute inset-y-0 right-12 flex items-center px-2 text-gray-400 hover:text-red-500 transition-all duration-300 group rounded-full"
+              className="absolute inset-y-0 right-10 sm:right-12 flex items-center px-2 text-gray-400 hover:text-red-500 transition-all duration-300 group rounded-full"
             >
-              <FiX className="w-4 h-4 group-hover:scale-125 group-hover:rotate-90 transition-all duration-300" />
+              <FiX className="w-3 h-3 sm:w-4 sm:h-4 group-hover:scale-125 group-hover:rotate-90 transition-all duration-300" />
             </button>
           )}
 
@@ -140,7 +140,7 @@ const SearchBar = () => {
           <button
             type="submit"
             disabled={!searchTerm.trim() || isLoading}
-            className={`absolute inset-y-0 right-2 top-2 bottom-2 flex items-center px-3 
+            className={`absolute inset-y-0 right-1 sm:right-2 top-1 sm:top-2 bottom-1 sm:bottom-2 flex items-center px-2 sm:px-3 
               rounded-full transition-all duration-500 ease-out
               ${
                 searchTerm.trim() && !isLoading
@@ -150,10 +150,10 @@ const SearchBar = () => {
             style={{ borderRadius: "50px" }}
           >
             {isLoading ? (
-              <div className="w-5 h-5 border-2 border-current border-t-transparent rounded-full animate-spin" />
+              <div className="w-4 h-4 sm:w-5 sm:h-5 border-2 border-current border-t-transparent rounded-full animate-spin" />
             ) : (
               <FiSearch
-                className={`w-5 h-5 transition-all duration-300 ${
+                className={`w-4 h-4 sm:w-5 sm:h-5 transition-all duration-300 ${
                   searchTerm.trim() ? "animate-pulse" : ""
                 }`}
               />

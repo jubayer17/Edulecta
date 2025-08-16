@@ -56,6 +56,7 @@ const courseSchema = new mongoose.Schema(
     courseDescription: { type: String, required: true },
     courseThumbnail: { type: String, required: true },
     coursePrice: { type: Number, required: true },
+    courseOfferPrice: { type: Number, required: true },
     courseCategory: { type: String, required: true },
     isPublished: { type: Boolean, default: true },
     discount: { type: Number, required: true, min: 0, max: 100 },

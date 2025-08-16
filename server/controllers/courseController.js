@@ -12,7 +12,7 @@ export const getAllCourse = async (req, res) => {
     // Get all courses without filtering
     const courses = await Course.find()
       .select(
-        "courseTitle courseDescription courseThumbnail coursePrice courseCategory isPublished discount courseContent courseRatings educator enrolledStudents createdAt updatedAt"
+        "courseTitle courseDescription courseThumbnail coursePrice courseOfferPrice courseCategory isPublished discount courseContent courseRatings educator enrolledStudents createdAt updatedAt"
       )
       .populate({
         path: "educator",
@@ -101,6 +101,66 @@ export const getCourseById = async (req, res) => {
     });
   } catch (error) {
     console.error("❌ Error fetching course:", error.message);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+      error: error.message,
+    });
+  }
+};
+
+// Update a course (Private: only educator can update their own courses)
+export const updateCourse = async (req, res) => {
+  try {
+    await connectDB();
+
+    const { _id: courseId, educator, ...updateData } = req.body;
+
+    if (!courseId || !mongoose.Types.ObjectId.isValid(courseId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid or missing course ID",
+      });
+    }
+
+    if (!educator || !educator._id) {
+      return res.status(400).json({
+        success: false,
+        message: "Educator ID missing in request body",
+      });
+    }
+
+    // Find the course
+    const course = await Course.findById(courseId);
+    if (!course) {
+      return res.status(404).json({
+        success: false,
+        message: "Course not found",
+      });
+    }
+
+    // Ensure educator owns this course
+    if (course.educator.toString() !== educator._id) {
+      return res.status(403).json({
+        success: false,
+        message: "You are not authorized to update this course",
+      });
+    }
+
+    // Update only provided fields
+    Object.keys(updateData).forEach((key) => {
+      course[key] = updateData[key];
+    });
+
+    const updatedCourse = await course.save();
+
+    return res.status(200).json({
+      success: true,
+      message: "Course updated successfully",
+      course: updatedCourse,
+    });
+  } catch (error) {
+    console.error("❌ Error updating course:", error.message);
     return res.status(500).json({
       success: false,
       message: "Internal server error",

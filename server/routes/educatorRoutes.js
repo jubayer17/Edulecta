@@ -6,10 +6,13 @@ import {
   getEducatorDashboardData,
   getEnrolledStudentsData,
   updateRoleToEducator,
-  updateEducatorDashboard, // <-- import the new controller
+  updateEducatorDashboard,
+  getEducatorInfo,
+  getEnrolledStudentsByEducator, // <-- import the new controller
 } from "../controllers/educatorController.js";
 import upload, { handleMulterError } from "./../configs/multer.js";
 import { protectEducator } from "./../middlewares/authMiddleware.js";
+import e from "express";
 
 const educatorRouter = express.Router();
 
@@ -43,7 +46,7 @@ educatorRouter.get(
 );
 
 // Update dashboard data (new route)
-educatorRouter.post(
+educatorRouter.patch(
   "/update-dashboard",
   protectEducator,
   updateEducatorDashboard
@@ -57,7 +60,17 @@ educatorRouter.get(
 );
 
 // Get educator info
-// educatorRouter.get("/me", protectEducator, getEducatorInfo);
+educatorRouter.get("/me", protectEducator, getEducatorInfo);
+
+// Get enrolled students
+educatorRouter.get(
+  "/enrolled-students-new",
+  protectEducator,
+  getEnrolledStudentsByEducator
+);
+
+// Get educator info
+educatorRouter.get("/me", protectEducator, getEducatorInfo);
 
 // Test endpoint for role update
 educatorRouter.get("/test-update-role", async (req, res) => {

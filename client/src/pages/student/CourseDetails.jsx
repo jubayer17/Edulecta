@@ -5,7 +5,7 @@ import Footer from "../../components/student/Footer";
 import Loading from "../../components/student/Loading";
 import { assets } from "../../assets/assets";
 import YouTube from "react-youtube";
-import axios from "axios";
+import axios, { all } from "axios";
 import { toast } from "react-toastify";
 
 const CourseDetails = () => {
@@ -37,7 +37,7 @@ const CourseDetails = () => {
       [chapterIndex]: !prev[chapterIndex],
     }));
   };
-
+  console.log(allCourses);
   // YouTube player options
   const videoPlayerOptions = {
     height: "208", // matches md:h-52 (208px)
@@ -163,9 +163,9 @@ const CourseDetails = () => {
 
   return (
     <>
-      <div className="flex md:flex-row flex-col gap-8 relative items-start justify-between md:px-16 lg:px-24 xl:px-32 px-6 md:pt-32 pt-24 text-left bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100">
+      <div className="flex md:flex-row flex-col gap-6 relative items-start justify-between md:px-8 lg:px-12 xl:px-16 px-4 md:pt-20 pt-16 text-left bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100">
         {/* Left column */}
-        <div className="flex-1 max-w-5xl z-10 text-gray-500 order-2 md:order-1">
+        <div className="flex-1 max-w-5xl z-10 text-gray-500 order-2 md:order-1 mr-12">
           {/* Course Category Badge */}
           <div className="mb-4">
             <span className="bg-blue-100 text-blue-800 text-xs font-semibold px-3 py-1 rounded-full border border-blue-200">

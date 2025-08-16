@@ -3,13 +3,15 @@ import Hero from "../../components/student/Hero";
 import SearchBar from "../../components/student/SearchBar";
 import Companies from "../../components/student/Companies";
 import CoursesSection from "../../components/student/CoursesSection";
+import TopPicksCourses from "../../components/student/TopPicksCourses";
+import NewlyAddedCourses from "../../components/student/NewlyAddedCourses";
 import TestimonialsSection from "../../components/student/TestimonialsSection";
 import CallToAction from "../../components/student/CallToAction";
 import Footer from "../../components/student/Footer";
 
 const Home = () => {
   return (
-    <div className="min-h-screen w-full relative overflow-hidden flex flex-col">
+    <div className="min-h-screen w-full relative overflow-hidden flex flex-col pb-20 md:pb-0">
       {/* Unified Background Elements for All Components */}
       <div className="fixed inset-0 bg-gradient-to-br from-indigo-50/40 via-purple-50/30 to-pink-50/40 -z-10"></div>
       <div className="fixed top-20 left-10 w-40 h-40 bg-blue-200/20 rounded-full blur-3xl animate-pulse -z-10"></div>
@@ -33,7 +35,7 @@ const Home = () => {
       <div className="relative z-10 ">
         <Hero />
 
-        <div className="flex justify-center mt-4 md:mt-6 px-4 md:px-6">
+        <div className="flex justify-center mt-4 md:mt-6 px-6 md:px-8 lg:px-6">
           <div className="w-full max-w-md md:max-w-lg">
             <SearchBar />
           </div>
@@ -45,6 +47,14 @@ const Home = () => {
 
         <section className="mt-12 md:mt-16 px-4 md:px-6">
           <CoursesSection />
+        </section>
+
+        <section className="mt-12 md:mt-16">
+          <TopPicksCourses />
+        </section>
+
+        <section className="mt-12 md:mt-16">
+          <NewlyAddedCourses />
         </section>
 
         <section className="mt-12 md:mt-16 px-4 md:px-6">

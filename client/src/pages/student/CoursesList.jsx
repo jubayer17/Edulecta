@@ -102,7 +102,9 @@ const CoursesList = () => {
   }, [allCourses, input, sortOption]);
 
   return (
-    <>
+    <div className="pb-20 md:pb-0">
+      {" "}
+      {/* Bottom padding for mobile nav */}
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 py-6 md:py-10">
         <div className="max-w-7xl mx-auto px-4 md:px-6">
           {/* Header */}
@@ -170,11 +172,11 @@ const CoursesList = () => {
                 </p>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6 lg:gap-8">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6 lg:gap-8 px-2 sm:px-0">
                 {filteredCourse.map((course) => (
                   <div
                     key={course._id}
-                    className="transform hover:scale-[1.02] md:hover:scale-[1.04] transition duration-300 ease-in-out w-full max-w-[320px] mx-auto"
+                    className="transform hover:scale-[1.02] md:hover:scale-[1.04] transition duration-300 ease-in-out w-full max-w-[300px] mx-auto sm:max-w-none"
                   >
                     <CourseCard course={course} />
                   </div>
@@ -205,7 +207,7 @@ const CoursesList = () => {
         </div>
       </div>
       <Footer />
-    </>
+    </div>
   );
 };
 

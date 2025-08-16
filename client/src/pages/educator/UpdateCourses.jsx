@@ -1,9 +1,25 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useContext } from "react";
 import { assets, dummyCourses } from "../../assets/assets";
 import Quill from "quill";
 import Loading from "../../components/student/Loading";
+import { AppContext } from "../../context/AppContext";
 
 const UpdateCourses = () => {
+  const {
+    educatorDashboard,
+    isEducator,
+    syncEducatorDashboard,
+    backendUrl,
+    token,
+    allCourses,
+    updateCourse,
+    user,
+  } = useContext(AppContext);
+  const educatorId = educatorDashboard.educatorId;
+  console.log("Educator ID:", educatorId);
+  console.log(educatorDashboard);
+  const anotherArray = JSON.parse(JSON.stringify(allCourses));
+  console.log("All Courses:", anotherArray);
   const [courses, setCourses] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCourse, setSelectedCourse] = useState(null);
@@ -48,16 +64,13 @@ const UpdateCourses = () => {
     }
   }, [courseData]);
 
-  // Fetch all courses when component mounts
   useEffect(() => {
-    const fetchCourses = async () => {
-      // Simulate fetching data - in real app this would be an API call
-      setTimeout(() => {
-        setCourses(dummyCourses);
-      }, 1000);
-    };
-    fetchCourses();
-  }, []);
+    if (allCourses) {
+      setCourses([...allCourses]); // or JSON.parse(JSON.stringify(allCourses))
+    }
+  }, [allCourses]);
+
+  console.log("Courses:", courses);
 
   const handleCourseSelect = (course) => {
     setSelectedCourse(course);
@@ -202,10 +215,10 @@ const UpdateCourses = () => {
     }
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
 
-    // Make sure we have all the basic course info filled out
+    // Existing validations remain unchanged
     if (
       !courseData.courseDescription ||
       courseData.courseDescription.trim() === "" ||
@@ -215,13 +228,11 @@ const UpdateCourses = () => {
       return;
     }
 
-    // Can't have a course without any chapters!
     if (courseData.courseContent.length === 0) {
       alert("Please add at least one chapter to your course");
       return;
     }
 
-    // Go through each chapter and make sure everything's filled out properly
     for (let i = 0; i < courseData.courseContent.length; i++) {
       const chapter = courseData.courseContent[i];
       if (!chapter.chapterTitle.trim()) {
@@ -237,7 +248,6 @@ const UpdateCourses = () => {
         return;
       }
 
-      // Check each lecture in this chapter
       for (let j = 0; j < chapter.chapterContent.length; j++) {
         const lecture = chapter.chapterContent[j];
         if (!lecture.lectureTitle.trim()) {
@@ -263,9 +273,59 @@ const UpdateCourses = () => {
       }
     }
 
-    console.log("Updated Course Data:", courseData);
-    alert("Course updated successfully!");
-    // This is where we'd actually save the updated course to our database
+    if (!educatorId) {
+      alert("Educator info not loaded yet. Please wait.");
+      return;
+    }
+
+    console.log("baler matha", educatorId);
+
+    // ---------------- Minimal change for local file upload ----------------
+    // Helper to convert File -> base64 data URL
+    const fileToDataUrl = (file) =>
+      new Promise((resolve, reject) => {
+        try {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result);
+          reader.onerror = (err) => reject(err);
+          reader.readAsDataURL(file);
+        } catch (err) {
+          reject(err);
+        }
+      });
+
+    try {
+      let payload;
+
+      // If the thumbnail is a File (user picked a local file), convert it to base64
+      if (courseData.courseThumbnail instanceof File) {
+        // convert file to data URL (base64)
+        const base64 = await fileToDataUrl(courseData.courseThumbnail);
+
+        // create a copy of courseData but replace courseThumbnail with base64 string
+        payload = {
+          ...courseData,
+          courseThumbnail: base64,
+          educator: { _id: educatorId },
+        };
+      } else {
+        // no file selected or already a string/url — keep your original behavior
+        payload = {
+          ...courseData,
+          educator: { _id: educatorId },
+        };
+      }
+
+      // Call your existing updateCourse exactly as before
+      const updated = await updateCourse(payload);
+
+      // Optionally handle the response (your existing code didn't change)
+      // e.g., refresh, notify, etc.
+    } catch (err) {
+      console.error("Error in handleSubmit (thumbnail handling):", err);
+      alert("Failed to update course. Check console for details.");
+    }
+    // --------------------------------------------------------------------
   };
 
   const categories = [

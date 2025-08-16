@@ -1,6 +1,7 @@
 import { clerkClient } from "@clerk/express";
 import connectDB from "../configs/mongodb.js";
 import { cloudinary } from "../configs/cloudinary.js";
+import Educator from "../models/Educator.js";
 //update the user role to educator
 // This function updates the user's role to "educator" in Clerk and connects to the database
 export const updateRoleToEducator = async (req, res) => {
@@ -93,6 +94,7 @@ export const AddCourse = async (req, res) => {
         "courseTitle",
         "courseDescription",
         "coursePrice",
+        "courseOfferPrice",
         "courseCategory",
         "discount",
       ];
@@ -433,7 +435,6 @@ export const getEnrolledStudentsData = async (req, res) => {
   }
 };
 
-// Update educator dashboard totals in User collection
 export const updateEducatorDashboard = async (req, res) => {
   try {
     const auth = req.auth();
@@ -443,33 +444,185 @@ export const updateEducatorDashboard = async (req, res) => {
       return res.status(400).json({ error: "User authentication required" });
     }
 
-    const { totalCourses, totalEnrollments, totalEarnings } = req.body;
-
     await connectDB();
+    const Educator = (await import("../models/Educator.js")).default;
+    const Course = (await import("../models/Course.js")).default;
 
-    const User = (await import("../models/User.js")).default;
+    // 1️⃣ Fetch all courses belonging to this educator
+    const courses = await Course.find({ educator: educatorId });
 
-    const updatedUser = await User.findByIdAndUpdate(
-      educatorId,
-      {
-        ...(totalCourses !== undefined && { totalCourses }),
-        ...(totalEnrollments !== undefined && { totalEnrollments }),
-        ...(totalEarnings !== undefined && { totalEarnings }),
-      },
-      { new: true } // return the updated document
+    if (!courses.length) {
+      return res
+        .status(404)
+        .json({ error: "No courses found for this educator" });
+    }
+
+    // 2️⃣ Build publishedCourses array
+    const publishedCourses = courses.map((course) => {
+      const totalEnrollments = course.enrolledStudents.length;
+      const totalEarnings = totalEnrollments * course.coursePrice;
+
+      return {
+        courseId: course._id,
+        title: course.courseTitle,
+        price: course.coursePrice,
+        isPublished: course.isPublished,
+        createdAt: course.createdAt,
+        updatedAt: course.updatedAt,
+        thumbnail: course.courseThumbnail,
+        enrolledStudents: course.enrolledStudents.map((studentId) => ({
+          studentId,
+          enrolledAt: course.createdAt, // if you track actual enrollment date, replace this
+        })),
+        totalEnrollments,
+        totalEarnings,
+      };
+    });
+
+    // 3️⃣ Calculate dashboard totals
+    const totalCourses = publishedCourses.length;
+    const totalEnrollments = publishedCourses.reduce(
+      (sum, course) => sum + course.totalEnrollments,
+      0
+    );
+    const totalEarnings = publishedCourses.reduce(
+      (sum, course) => sum + course.totalEarnings,
+      0
     );
 
-    if (!updatedUser) {
-      return res.status(404).json({ error: "Educator not found" });
-    }
+    // 4️⃣ Update educator document
+    const updatedEducator = await Educator.findByIdAndUpdate(
+      educatorId,
+      {
+        publishedCourses,
+        totalCourses,
+        totalEnrollments,
+        totalEarnings,
+        updatedAt: Date.now(),
+      },
+      { new: true }
+    );
 
     return res.status(200).json({
       success: true,
       message: "Educator dashboard updated successfully",
-      data: updatedUser,
+      data: updatedEducator,
     });
   } catch (error) {
     console.error("❌ Error updating educator dashboard:", error);
     return res.status(500).json({ error: "Internal server error" });
+  }
+};
+
+// Get educator dashboard info (total courses, enrollments, earnings)
+// Get educator dashboard info (total courses, enrollments, earnings, publishedCourses)
+export const getEducatorInfo = async (req, res) => {
+  try {
+    const auth = req.auth();
+    const { userId: educatorId } = auth || {};
+
+    if (!educatorId) {
+      return res.status(400).json({ error: "User authentication required" });
+    }
+
+    await connectDB();
+
+    const Course = (await import("../models/Course.js")).default;
+
+    // 🔹 Fetch all courses of this educator
+    const courses = await Course.find({ educator: educatorId });
+
+    if (!courses.length) {
+      return res
+        .status(404)
+        .json({ error: "No courses found for this educator" });
+    }
+
+    // 🔹 Build publishedCourses array
+    const publishedCourses = courses.map((course) => {
+      const totalEnrollments = course.enrolledStudents.length;
+      const totalEarnings = totalEnrollments * (course.coursePrice || 0);
+
+      return {
+        courseId: course._id,
+        title: course.courseTitle,
+        price: course.coursePrice,
+        isPublished: course.isPublished,
+        createdAt: course.createdAt,
+        updatedAt: course.updatedAt,
+        thumbnail: course.courseThumbnail,
+        enrolledStudents: course.enrolledStudents.map((studentId) => ({
+          studentId,
+          enrolledAt: course.createdAt, // Replace with actual enrollment date if tracked
+        })),
+        totalEnrollments,
+        totalEarnings,
+      };
+    });
+
+    // 🔹 Totals
+    const totalCourses = publishedCourses.length;
+    const totalEnrollments = publishedCourses.reduce(
+      (sum, course) => sum + course.totalEnrollments,
+      0
+    );
+    const totalEarnings = publishedCourses.reduce(
+      (sum, course) => sum + course.totalEarnings,
+      0
+    );
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        educatorId,
+        totalCourses,
+        totalEnrollments,
+        totalEarnings,
+        publishedCourses, // ✅ Include full published courses list
+      },
+    });
+  } catch (error) {
+    console.error("❌ Error fetching educator info:", error);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+};
+
+export const getEnrolledStudentsByEducator = async (req, res) => {
+  try {
+    const auth = req.auth();
+    const { userId: educatorId } = auth || {};
+    // Step 1: Get educator and their published courses
+    const educator = await Educator.findById(educatorId).populate(
+      "publishedCourses"
+    );
+    if (!educator) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Educator not found" });
+    }
+
+    // Step 2: Collect all enrolled students from those courses
+    let studentIds = [];
+    for (const course of educator.publishedCourses) {
+      studentIds.push(...course.enrolledStudents);
+    }
+
+    // Remove duplicate student IDs
+    studentIds = [...new Set(studentIds.map((id) => id.toString()))];
+
+    // Step 3: Fetch student info
+    const students = await User.find({ _id: { $in: studentIds } }).select(
+      "-password"
+    );
+
+    res.status(200).json({
+      success: true,
+      educator: educator.username,
+      totalStudents: students.length,
+      students,
+    });
+  } catch (error) {
+    console.error("Error fetching enrolled students:", error);
+    res.status(500).json({ success: false, message: "Server error" });
   }
 };

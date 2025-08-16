@@ -31,7 +31,7 @@ const educatorSchema = new mongoose.Schema({
   publishedCourses: [
     {
       courseId: {
-        type: mongoose.Schema.Types.ObjectId,
+        type: String,
         ref: "Course",
         required: true,
       },
@@ -39,14 +39,30 @@ const educatorSchema = new mongoose.Schema({
         type: String,
         required: true,
       },
+      thumbnail: {
+        type: String,
+        required: true,
+      },
       price: {
         type: Number,
         default: 0,
       },
+      isPublished: {
+        type: Boolean,
+        default: true,
+      },
+      createdAt: {
+        type: Date,
+        default: Date.now,
+      },
+      updatedAt: {
+        type: Date,
+        default: Date.now,
+      },
       enrolledStudents: [
         {
           studentId: {
-            type: mongoose.Schema.Types.ObjectId,
+            type: String,
             ref: "User",
             required: true,
           },

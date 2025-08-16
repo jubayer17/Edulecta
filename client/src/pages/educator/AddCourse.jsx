@@ -1,21 +1,36 @@
+/* eslint-disable no-unused-vars */
 import React, { useState, useEffect, useRef } from "react";
 import { assets } from "../../assets/assets";
 import Quill from "quill";
+import axios from "axios";
+import { useContext } from "react";
+import { AppContext } from "./../../context/AppContext";
 
 const AddCourse = () => {
+  // Your original working states
+  const [jsonFile, setJsonFile] = useState(null);
+  const [imageFile, setImageFile] = useState(null);
+  const [thumbnailPreview, setThumbnailPreview] = useState(null);
+
+  // Detailed form states - FIXED: Added discount field and made courseOfferPrice optional
   const [courseData, setCourseData] = useState({
     courseTitle: "",
     courseDescription: "",
     coursePrice: "",
-    courseOfferPrice: "",
+    courseOfferPrice: "", // This is optional - will calculate discount from this
+    discount: "", // This is what the database expects
     courseCategory: "",
     courseThumbnail: null,
     courseContent: [], // stores all the chapters we create
+    isPublished: true, // Added this field that appears in your DB
   });
 
-  const [thumbnailPreview, setThumbnailPreview] = useState(null);
+  const [detailedThumbnailPreview, setDetailedThumbnailPreview] =
+    useState(null);
   const quillRef = useRef(null);
   const editorRef = useRef(null);
+
+  const { backendUrl, getToken } = useContext(AppContext);
 
   // Setting up the rich text editor for course descriptions
   useEffect(() => {
@@ -50,12 +65,120 @@ const AddCourse = () => {
     }
   }, []);
 
+  // Function to calculate discount percentage from offer price
+  const calculateDiscount = (originalPrice, offerPrice) => {
+    if (!originalPrice || !offerPrice) return 0;
+    const original = parseFloat(originalPrice);
+    const offer = parseFloat(offerPrice);
+    if (original <= 0 || offer >= original) return 0;
+    return Math.round(((original - offer) / original) * 100);
+  };
+
+  // Your original working JSON upload functions
+  const handleJsonChange = (e) => {
+    const file = e.target.files[0];
+    if (file) setJsonFile(file);
+  };
+
+  const handleImageChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setImageFile(file);
+
+      // Create image preview
+      const reader = new FileReader();
+      reader.onloadend = () => setThumbnailPreview(reader.result);
+      reader.readAsDataURL(file);
+    }
+  };
+
+  // Your original working create course function
+  const handleCreateCourse = async () => {
+    if (!jsonFile) return alert("Please select a JSON file for course data");
+    if (!imageFile)
+      return alert("Please select an image file for course thumbnail");
+
+    try {
+      const token = await getToken();
+
+      // Read and parse JSON file
+      const jsonText = await jsonFile.text();
+      let courseData;
+      try {
+        courseData = JSON.parse(jsonText);
+      } catch {
+        return alert("Invalid JSON file");
+      }
+
+      // Ensure the JSON data has the discount field if it's missing
+      if (
+        !courseData.discount &&
+        courseData.courseOfferPrice &&
+        courseData.coursePrice
+      ) {
+        courseData.discount = calculateDiscount(
+          courseData.coursePrice,
+          courseData.courseOfferPrice
+        );
+      } else if (!courseData.discount) {
+        courseData.discount = 0; // Default discount
+      }
+
+      // Prepare FormData
+      const formData = new FormData();
+      formData.append("courseData", JSON.stringify(courseData)); // must be a JSON string
+      formData.append("image", imageFile); // must match upload.single("image")
+
+      // Send request (NO manual Content-Type)
+      const response = await axios.post(
+        `${backendUrl}/api/educator/add-course`,
+        formData,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`, // only add auth header
+          },
+        }
+      );
+
+      if (response.data.success) {
+        alert("Course created successfully!");
+        console.log("Created Course:", response.data);
+      } else {
+        alert(
+          "Failed to create course: " + (response.data.error || "Unknown error")
+        );
+      }
+    } catch (err) {
+      console.error("Create course error:", err.response?.data || err.message);
+      alert(
+        `Error creating course: ${err.response?.data?.error || err.message}`
+      );
+    }
+  };
+
+  // Detailed form functions
   const handleInputChange = (e) => {
     const { name, value } = e.target;
-    setCourseData((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
+    setCourseData((prev) => {
+      const updated = {
+        ...prev,
+        [name]: value,
+      };
+
+      // Auto-calculate discount when price or offer price changes
+      if (name === "coursePrice" || name === "courseOfferPrice") {
+        if (updated.coursePrice && updated.courseOfferPrice) {
+          updated.discount = calculateDiscount(
+            updated.coursePrice,
+            updated.courseOfferPrice
+          );
+        } else {
+          updated.discount = 0;
+        }
+      }
+
+      return updated;
+    });
   };
 
   const handleThumbnailChange = (e) => {
@@ -69,7 +192,7 @@ const AddCourse = () => {
       // Create preview URL
       const reader = new FileReader();
       reader.onloadend = () => {
-        setThumbnailPreview(reader.result);
+        setDetailedThumbnailPreview(reader.result);
       };
       reader.readAsDataURL(file);
     }
@@ -118,6 +241,7 @@ const AddCourse = () => {
       isPreviewFree: false,
       lectureOrder:
         courseData.courseContent[chapterIndex].chapterContent.length + 1,
+      lectureResources: [], // Added this field that appears in your DB
     };
 
     setCourseData((prev) => ({
@@ -167,7 +291,8 @@ const AddCourse = () => {
     }));
   };
 
-  const handleSubmit = (e) => {
+  // Detailed form submit using your original working logic
+  const handleSubmit = async (e) => {
     e.preventDefault();
 
     // Make sure we have all the basic course info filled out
@@ -228,8 +353,69 @@ const AddCourse = () => {
       }
     }
 
-    console.log("Course Data:", courseData);
-    // This is where we'd actually save the course to our database
+    // Use your original working submission logic
+    try {
+      const token = await getToken();
+
+      // FIXED: Prepare the course data with proper field mapping
+      const submissionData = {
+        ...courseData,
+        // Ensure we have the discount field the database expects
+        discount: courseData.discount || 0,
+        // Convert price fields to numbers
+        coursePrice: parseFloat(courseData.coursePrice) || 0,
+        courseOfferPrice: courseData.courseOfferPrice
+          ? parseFloat(courseData.courseOfferPrice)
+          : undefined,
+      };
+
+      // Prepare FormData using the detailed form data
+      const formData = new FormData();
+      formData.append("courseData", JSON.stringify(submissionData)); // must be a JSON string
+      formData.append("image", courseData.courseThumbnail); // must match upload.single("image")
+
+      // Send request (NO manual Content-Type) - your original working code
+      const response = await axios.post(
+        `${backendUrl}/api/educator/add-course`,
+        formData,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`, // only add auth header
+          },
+        }
+      );
+
+      if (response.data.success) {
+        alert("Course created successfully!");
+        console.log("Created Course:", response.data);
+
+        // Reset the form
+        setCourseData({
+          courseTitle: "",
+          courseDescription: "",
+          coursePrice: "",
+          courseOfferPrice: "",
+          discount: "",
+          courseCategory: "",
+          courseThumbnail: null,
+          courseContent: [],
+          isPublished: true,
+        });
+        setDetailedThumbnailPreview(null);
+        if (quillRef.current) {
+          quillRef.current.setText("");
+        }
+      } else {
+        alert(
+          "Failed to create course: " + (response.data.error || "Unknown error")
+        );
+      }
+    } catch (err) {
+      console.error("Create course error:", err.response?.data || err.message);
+      alert(
+        `Error creating course: ${err.response?.data?.error || err.message}`
+      );
+    }
   };
 
   const categories = [
@@ -245,7 +431,7 @@ const AddCourse = () => {
   ];
 
   return (
-    <div className="min-h-screen flex flex-col items-start justify-between md:p-8 md:pt-0 p-4 pt-8   bg-gradient-to-br from-indigo-50/40 via-purple-50/30 to-pink-50/40">
+    <div className="min-h-screen flex flex-col items-start justify-between md:p-8 md:pt-0 p-4 pt-8 bg-gradient-to-br from-indigo-50/40 via-purple-50/30 to-pink-50/40">
       {/* Main page header */}
       <div className="w-full mb-8">
         <div className="bg-white/80 backdrop-blur-md rounded-2xl shadow-lg border border-white/20 p-6">
@@ -261,13 +447,57 @@ const AddCourse = () => {
         </div>
       </div>
 
-      {/* The actual course creation form */}
-      <div className="w-full flex-1">
+      <div className="w-full flex-1 space-y-8">
+        {/* Your original working JSON upload section */}
+        <div className="bg-white/80 backdrop-blur-md rounded-2xl shadow-lg border border-white/20 overflow-hidden">
+          <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white p-4">
+            <h2 className="text-lg font-semibold">
+              Quick Upload (JSON + Image)
+            </h2>
+          </div>
+          <div className="p-6">
+            <div className="mb-4">
+              <label className="block mb-1 font-semibold">
+                Course JSON File:
+              </label>
+              <input type="file" accept=".json" onChange={handleJsonChange} />
+            </div>
+
+            <div className="mb-4">
+              <label className="block mb-1 font-semibold">
+                Course Thumbnail:
+              </label>
+              <input
+                type="file"
+                accept="image/*"
+                onChange={handleImageChange}
+              />
+              {thumbnailPreview && (
+                <img
+                  src={thumbnailPreview}
+                  alt="Thumbnail Preview"
+                  className="mt-2 w-32 h-32 object-cover rounded"
+                />
+              )}
+            </div>
+
+            <button
+              onClick={handleCreateCourse}
+              className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition-colors"
+            >
+              Create Course (JSON Upload)
+            </button>
+          </div>
+        </div>
+
+        {/* Detailed form section */}
         <form onSubmit={handleSubmit} className="space-y-6">
           <div className="bg-white/80 backdrop-blur-md rounded-2xl shadow-lg border border-white/20 overflow-hidden">
             {/* Form section header */}
             <div className="bg-gradient-to-r from-orange-600 to-red-600 text-white p-4">
-              <h2 className="text-lg font-semibold">Course Information</h2>
+              <h2 className="text-lg font-semibold">
+                Detailed Course Creation
+              </h2>
             </div>
 
             {/* All the form inputs go here */}
@@ -333,7 +563,7 @@ const AddCourse = () => {
               </div>
 
               {/* Course pricing - regular price and optional discount price */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div>
                   <label
                     htmlFor="coursePrice"
@@ -375,6 +605,27 @@ const AddCourse = () => {
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-all duration-200 bg-white/50 backdrop-blur-sm"
                   />
                 </div>
+
+                <div>
+                  <label
+                    htmlFor="discount"
+                    className="block text-sm font-semibold text-gray-700 mb-2"
+                  >
+                    Discount %{" "}
+                    <span className="text-gray-500 text-xs">
+                      (Auto-calculated)
+                    </span>
+                  </label>
+                  <input
+                    type="number"
+                    id="discount"
+                    name="discount"
+                    value={courseData.discount}
+                    readOnly
+                    placeholder="0"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg bg-gray-100 text-gray-600 cursor-not-allowed"
+                  />
+                </div>
               </div>
 
               {/* Upload a nice thumbnail image for the course */}
@@ -397,10 +648,10 @@ const AddCourse = () => {
                       className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-all duration-200 bg-white/50 backdrop-blur-sm"
                     />
                   </div>
-                  {thumbnailPreview && (
+                  {detailedThumbnailPreview && (
                     <div className="w-20 h-12 rounded-lg overflow-hidden border-2 border-orange-200">
                       <img
-                        src={thumbnailPreview}
+                        src={detailedThumbnailPreview}
                         alt="Thumbnail preview"
                         className="w-full h-full object-cover"
                       />
@@ -420,18 +671,12 @@ const AddCourse = () => {
                     onClick={addChapter}
                     className="px-4 py-2 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg hover:from-blue-600 hover:to-blue-700 transition-all duration-200 font-medium text-sm flex items-center gap-2"
                   >
-                    <img src={assets.add_icon} alt="add" className="w-4 h-4" />
                     Add Chapter
                   </button>
                 </div>
 
                 {courseData.courseContent.length === 0 ? (
                   <div className="bg-gray-50/80 border-2 border-dashed border-gray-300 rounded-lg p-8 text-center">
-                    <img
-                      src={assets.lesson_icon}
-                      alt="lessons"
-                      className="w-12 h-12 mx-auto mb-3 opacity-50"
-                    />
                     <p className="text-gray-500 mb-4">No chapters added yet</p>
                     <button
                       type="button"
@@ -459,11 +704,7 @@ const AddCourse = () => {
                             className="delete-btn p-2 rounded-full text-red-500 hover:text-red-700 hover:bg-red-50 transition-all duration-200 cursor-pointer"
                             title="Delete Chapter"
                           >
-                            <img
-                              src={assets.cross_icon}
-                              alt="delete"
-                              className="cross-icon w-5 h-5"
-                            />
+                            ❌
                           </button>
                         </div>
 
@@ -500,11 +741,6 @@ const AddCourse = () => {
                               onClick={() => addLecture(chapterIndex)}
                               className="px-3 py-1 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-md hover:from-green-600 hover:to-green-700 transition-all duration-200 font-medium text-xs flex items-center gap-1"
                             >
-                              <img
-                                src={assets.add_icon}
-                                alt="add"
-                                className="w-3 h-3"
-                              />
                               Add Lecture
                             </button>
                           </div>
@@ -545,11 +781,7 @@ const AddCourse = () => {
                                         className="delete-btn p-1.5 rounded-full text-red-500 hover:text-red-700 hover:bg-red-50 transition-all duration-200 cursor-pointer"
                                         title="Delete Lecture"
                                       >
-                                        <img
-                                          src={assets.cross_icon}
-                                          alt="delete"
-                                          className="cross-icon w-4 h-4"
-                                        />
+                                        ❌
                                       </button>
                                     </div>
 
@@ -682,7 +914,7 @@ const AddCourse = () => {
                     type="submit"
                     className="px-6 py-2 bg-gradient-to-r from-orange-500 to-red-600 text-white rounded-lg hover:from-orange-600 hover:to-red-700 transition-all duration-200 font-semibold"
                   >
-                    Create Course
+                    Create Course (Detailed Form)
                   </button>
                 </div>
               </div>
@@ -695,11 +927,7 @@ const AddCourse = () => {
       <div className="w-full mt-8 grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="bg-white/80 backdrop-blur-md rounded-xl shadow-lg border border-white/20 p-6 text-center">
           <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-3">
-            <img
-              src={assets.file_upload_icon}
-              alt="upload"
-              className="w-6 h-6"
-            />
+            📄
           </div>
           <h3 className="font-semibold text-gray-800 mb-2">Upload Content</h3>
           <p className="text-gray-600 text-sm">
@@ -709,7 +937,7 @@ const AddCourse = () => {
 
         <div className="bg-white/80 backdrop-blur-md rounded-xl shadow-lg border border-white/20 p-6 text-center">
           <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-3">
-            <img src={assets.user_icon} alt="students" className="w-6 h-6" />
+            👥
           </div>
           <h3 className="font-semibold text-gray-800 mb-2">Reach Students</h3>
           <p className="text-gray-600 text-sm">
@@ -719,7 +947,7 @@ const AddCourse = () => {
 
         <div className="bg-white/80 backdrop-blur-md rounded-xl shadow-lg border border-white/20 p-6 text-center">
           <div className="w-12 h-12 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-3">
-            <img src={assets.earning_icon} alt="earnings" className="w-6 h-6" />
+            💰
           </div>
           <h3 className="font-semibold text-gray-800 mb-2">Earn Revenue</h3>
           <p className="text-gray-600 text-sm">

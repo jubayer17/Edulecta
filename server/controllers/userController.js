@@ -32,10 +32,24 @@ export const GetUserData = async (req, res) => {
 
     await connectDB();
 
+    // 1️⃣ Try to find existing user
     let user = await User.findById(userId).select("-password");
 
+    // 2️⃣ If not found, create a new user
     if (!user) {
-      console.error("User not found:", userId);
+      console.warn("User not found, creating new one:", userId);
+
+      // Make sure these values come from `auth` or a request body
+      const newUserData = {
+        _id: userId,
+        username: auth?.username || `user_${Date.now()}`, // fallback username
+        email: auth?.email || `${userId}@example.com`, // fallback email
+        password: auth?.password || "defaultpassword", // 🔹 In production, hash it!
+        imageUrl: auth?.imageUrl || "https://via.placeholder.com/150",
+      };
+
+      user = new User(newUserData);
+      await user.save();
     }
 
     return res.status(200).json({

@@ -295,7 +295,9 @@ const MyEnrollments = () => {
   };
 
   return (
-    <>
+    <div className="pb-20 md:pb-0">
+      {" "}
+      {/* Bottom padding for mobile nav */}
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 py-4 md:py-8 lg:py-12">
         <div className="max-w-7xl mx-auto px-3 sm:px-4 md:px-6 lg:px-16">
           {/* Page Header */}
@@ -605,7 +607,7 @@ const MyEnrollments = () => {
       <div className="mt-8 md:mt-12">
         <Footer />
       </div>
-    </>
+    </div>
   );
 };
 
