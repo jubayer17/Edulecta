@@ -5,13 +5,14 @@ import Companies from "../../components/student/Companies";
 import CoursesSection from "../../components/student/CoursesSection";
 import TopPicksCourses from "../../components/student/TopPicksCourses";
 import NewlyAddedCourses from "../../components/student/NewlyAddedCourses";
+import SubscriptionPlans from "../../components/student/SubscriptionPlans";
 import TestimonialsSection from "../../components/student/TestimonialsSection";
 import CallToAction from "../../components/student/CallToAction";
 import Footer from "../../components/student/Footer";
 
 const Home = () => {
   return (
-    <div className="min-h-screen w-full relative overflow-hidden flex flex-col pb-20 md:pb-0">
+    <div className="min-h-screen w-full relative overflow-hidden flex flex-col pt-16 md:pt-20 pb-20 md:pb-0">
       {/* Unified Background Elements for All Components */}
       <div className="fixed inset-0 bg-gradient-to-br from-indigo-50/40 via-purple-50/30 to-pink-50/40 -z-10"></div>
       <div className="fixed top-20 left-10 w-40 h-40 bg-blue-200/20 rounded-full blur-3xl animate-pulse -z-10"></div>
@@ -55,6 +56,10 @@ const Home = () => {
 
         <section className="mt-12 md:mt-16">
           <NewlyAddedCourses />
+        </section>
+
+        <section id="subscription" className="mt-12 md:mt-16">
+          <SubscriptionPlans />
         </section>
 
         <section className="mt-12 md:mt-16 px-4 md:px-6">

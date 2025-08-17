@@ -3,9 +3,10 @@ import { AppContext } from "../../context/AppContext";
 import { assets } from "../../assets/assets";
 import { Link } from "react-router-dom";
 import { FiShoppingCart, FiHeart } from "react-icons/fi";
+import { toast } from "react-toastify";
 
 const CourseCard = ({ course }) => {
-  const { calculateRating, addToCart, cartItems, toggleCartDrawer } =
+  const { calculateRating, addToCart, cartItems, userData, navigate } =
     useContext(AppContext);
   const rating = calculateRating(course);
 
@@ -15,11 +16,29 @@ const CourseCard = ({ course }) => {
   const handleAddToCart = (e) => {
     e.preventDefault();
     e.stopPropagation();
+
+    // Check if user is logged in
+    if (!userData) {
+      toast.warn("Please sign in first to add courses to cart");
+      return;
+    }
+
     addToCart(course);
-    // Open cart drawer after adding item
-    setTimeout(() => {
-      toggleCartDrawer();
-    }, 100);
+    // Don't auto-open drawer - let user click cart icon when ready
+  };
+
+  const handleEnrollNow = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    // Check if user is logged in
+    if (!userData) {
+      toast.warn("Please sign in first to enroll in courses");
+      return;
+    }
+
+    // Navigate to course details page
+    navigate(`/course/${course._id}`);
   };
 
   // Calculate course duration in weeks
@@ -221,7 +240,10 @@ const CourseCard = ({ course }) => {
                 </span>
               </button>
 
-              <button className="flex-1 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white px-2 py-2 text-xs font-medium rounded-lg transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1">
+              <button
+                onClick={handleEnrollNow}
+                className="flex-1 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white px-2 py-2 text-xs font-medium rounded-lg transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1"
+              >
                 <span className="whitespace-nowrap text-xs">Enroll Now</span>
               </button>
             </div>

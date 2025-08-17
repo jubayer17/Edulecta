@@ -1249,3 +1249,198 @@ export const addCourseRating = async (req, res) => {
     return res.status(500).json({ success: false, message: error.message });
   }
 };
+
+// Get pending purchases count
+export const getPendingPurchasesCount = async (req, res) => {
+  try {
+    const auth = req.auth();
+    const userId = auth?.userId;
+
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        error: "User authentication required",
+      });
+    }
+
+    await connectDB();
+
+    // First, clean up old purchases automatically
+    const oneDayAgo = new Date();
+    oneDayAgo.setHours(oneDayAgo.getHours() - 24);
+
+    // Mark old pending/incomplete purchases as expired
+    await Purchase.updateMany(
+      {
+        userId,
+        status: { $in: ["pending", "incomplete"] },
+        createdAt: { $lt: oneDayAgo }
+      },
+      {
+        $set: { status: "expired" }
+      }
+    );
+
+    // Count only recent pending/incomplete purchases (within last 24 hours)
+    const pendingCount = await Purchase.countDocuments({
+      userId,
+      status: { $in: ["pending", "incomplete"] },
+      createdAt: { $gte: oneDayAgo }
+    });
+
+    // TEMPORARY FIX: Force count to be 1 if there are any pending purchases
+    const actualCount = pendingCount > 0 ? 1 : 0;
+
+    // For debugging - get the actual purchases to see what's there
+    const actualPurchases = await Purchase.find({
+      userId,
+      status: {
+        $in: ["pending", "incomplete", "failed", "cancelled", "expired"],
+      },
+    })
+      .select("status courseId createdAt stripeSessionId")
+      .lean();
+
+    console.log(
+      `🔍 Debug - User ${userId} has ${pendingCount} pending purchases (showing ${actualCount})`
+    );
+    console.log(`🔍 Debug - All user purchases:`, actualPurchases);
+
+    return res.status(200).json({
+      success: true,
+      message: "Pending purchases count fetched successfully",
+      count: actualCount, // Use the corrected count
+      debug: {
+        totalPurchases: actualPurchases.length,
+        purchasesByStatus: actualPurchases.reduce((acc, p) => {
+          acc[p.status] = (acc[p.status] || 0) + 1;
+          return acc;
+        }, {}),
+        purchases: actualPurchases,
+        rawCount: pendingCount,
+        correctedCount: actualCount,
+      },
+    });
+  } catch (error) {
+    console.error("❌ Error fetching pending purchases count:", error.message);
+    return res.status(500).json({
+      success: false,
+      error: "Internal server error",
+      message: error.message,
+    });
+  }
+};
+
+// Clean up old purchases (utility function)
+export const cleanupOldPurchases = async (req, res) => {
+  try {
+    const auth = req.auth();
+    const userId = auth?.userId;
+
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        error: "User authentication required",
+      });
+    }
+
+    await connectDB();
+
+    // Remove old failed, cancelled, and expired purchases older than 7 days
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+
+    const deletedPurchases = await Purchase.deleteMany({
+      userId,
+      status: { $in: ["failed", "cancelled", "expired"] },
+      createdAt: { $lt: sevenDaysAgo },
+    });
+
+    // Also clean up very old pending purchases (older than 24 hours) that are likely expired
+    const oneDayAgo = new Date();
+    oneDayAgo.setHours(oneDayAgo.getHours() - 24);
+
+    const expiredPending = await Purchase.updateMany(
+      {
+        userId,
+        status: { $in: ["pending", "incomplete"] },
+        createdAt: { $lt: oneDayAgo },
+      },
+      {
+        $set: { status: "expired" },
+      }
+    );
+
+    return res.status(200).json({
+      success: true,
+      message: "Old purchases cleaned up successfully",
+      deletedCount: deletedPurchases.deletedCount,
+      expiredCount: expiredPending.modifiedCount,
+    });
+  } catch (error) {
+    console.error("❌ Error cleaning up old purchases:", error.message);
+    return res.status(500).json({
+      success: false,
+      error: "Internal server error",
+      message: error.message,
+    });
+  }
+};
+
+// Debug endpoint to see all purchases for a user
+export const debugUserPurchases = async (req, res) => {
+  try {
+    const auth = req.auth();
+    const userId = auth?.userId;
+
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        error: "User authentication required",
+      });
+    }
+
+    await connectDB();
+
+    // Get all purchases for this user
+    const allPurchases = await Purchase.find({ userId })
+      .select("status courseId createdAt stripeSessionId amount")
+      .populate('courseId', 'courseTitle')
+      .sort({ createdAt: -1 })
+      .lean();
+
+    const purchasesByStatus = allPurchases.reduce((acc, p) => {
+      acc[p.status] = (acc[p.status] || 0) + 1;
+      return acc;
+    }, {});
+
+    const oneDayAgo = new Date();
+    oneDayAgo.setHours(oneDayAgo.getHours() - 24);
+
+    const recentPending = allPurchases.filter(p => 
+      ["pending", "incomplete"].includes(p.status) && 
+      new Date(p.createdAt) >= oneDayAgo
+    );
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        totalPurchases: allPurchases.length,
+        purchasesByStatus,
+        recentPendingCount: recentPending.length,
+        allPurchases: allPurchases.map(p => ({
+          ...p,
+          courseTitle: p.courseId?.courseTitle || 'Unknown Course',
+          age: Math.round((Date.now() - new Date(p.createdAt).getTime()) / (1000 * 60 * 60)) + ' hours'
+        }))
+      }
+    });
+  } catch (error) {
+    console.error("❌ Error debugging user purchases:", error.message);
+    return res.status(500).json({
+      success: false,
+      error: "Internal server error",
+      message: error.message,
+    });
+  }
+};

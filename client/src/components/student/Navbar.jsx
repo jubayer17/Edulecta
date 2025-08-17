@@ -1,4 +1,4 @@
-import React, { useContext, useState } from "react";
+import React, { useContext, useState, useEffect } from "react";
 import { assets } from "./../../assets/assets";
 import { Link, useLocation } from "react-router-dom";
 import {
@@ -30,7 +30,20 @@ const Navbar = () => {
     getToken,
     cartItems,
     toggleCartDrawer,
+    cartVibrating,
+    pendingPurchases = [],
+    fetchPendingPurchases,
   } = useContext(AppContext);
+
+  // Debug logging for pending purchases
+  console.log("🔍 Navbar pendingPurchases:", pendingPurchases.length);
+
+  // Fetch pending purchases when component mounts or user changes
+  useEffect(() => {
+    if (user) {
+      fetchPendingPurchases();
+    }
+  }, [user, fetchPendingPurchases]);
 
   const becomeEducator = async () => {
     try {
@@ -92,6 +105,7 @@ const Navbar = () => {
       path: "/pending-purchases",
       icon: FiClock,
       onClick: () => navigate("/pending-purchases"),
+      badge: pendingPurchases.length > 0 ? pendingPurchases.length : null,
     },
   ];
 
@@ -99,11 +113,12 @@ const Navbar = () => {
     <>
       {/* Mobile Navigation Bar */}
       <div
-        className={`md:hidden px-3 py-2 border-b border-gray-200/50 shadow-sm backdrop-blur-lg ${
+        className={`md:hidden fixed top-0 left-0 right-0 z-50 px-4 py-3 border-b border-gray-200/60 shadow-lg backdrop-blur-lg ${
           isCourseListPage
-            ? "bg-white/95"
-            : "bg-gradient-to-r from-blue-50/90 via-indigo-50/90 to-purple-50/90"
+            ? "bg-white/98"
+            : "bg-gradient-to-r from-blue-50/98 via-indigo-50/98 to-purple-50/98"
         }`}
+        style={{ backdropFilter: "blur(20px)" }}
       >
         <div className="flex items-center justify-between">
           {/* Logo */}
@@ -116,20 +131,29 @@ const Navbar = () => {
           </Link>
 
           {/* Right side: Cart + Profile + Menu */}
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
             {/* Cart Icon - Enhanced */}
             <button
               onClick={toggleCartDrawer}
-              className="relative p-2.5 rounded-full hover:bg-white/90 transition-all duration-300 shadow-lg border border-white/50 group"
+              className={`relative p-3 rounded-xl transition-all duration-300 group transform hover:scale-105 ${
+                cartVibrating ? "animate-bounce" : ""
+              } ${
+                cartItems.length > 0
+                  ? "bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 shadow-md"
+                  : "bg-white/90 border border-gray-200 shadow-sm"
+              }`}
             >
-              <FiShoppingBag className="w-5 h-5 text-gray-600 group-hover:text-blue-600 group-hover:scale-110 transition-all duration-200" />
+              <FiShoppingBag
+                className={`w-5 h-5 transition-all duration-300 ${
+                  cartItems.length > 0
+                    ? "text-blue-600"
+                    : "text-gray-600 group-hover:text-blue-600"
+                } group-hover:scale-110`}
+              />
               {cartItems.length > 0 && (
-                <>
-                  <span className="absolute -top-1 -right-1 bg-gradient-to-r from-red-500 to-pink-500 text-white text-xs rounded-full w-6 h-6 flex items-center justify-center font-bold animate-pulse border-2 border-white">
-                    {cartItems.length > 9 ? "9+" : cartItems.length}
-                  </span>
-                  <span className="absolute -top-1 -right-1 bg-red-400 rounded-full w-6 h-6 animate-ping"></span>
-                </>
+                <span className="absolute -top-1 -right-1 bg-gradient-to-r from-red-500 to-pink-500 text-white text-xs rounded-full w-6 h-6 flex items-center justify-center font-bold border-2 border-white shadow-lg">
+                  {cartItems.length > 9 ? "9+" : cartItems.length}
+                </span>
               )}
             </button>
 
@@ -159,23 +183,23 @@ const Navbar = () => {
             {/* Menu Button */}
             <button
               onClick={() => setMenuOpen(!menuOpen)}
-              className="relative p-2.5 rounded-full hover:bg-white/80 transition-all duration-300 group shadow-md border border-white/50"
+              className="relative p-3 rounded-xl bg-white/90 hover:bg-white transition-all duration-300 group shadow-md border border-gray-200 hover:border-gray-300 transform hover:scale-105"
             >
               <div className="relative w-5 h-5">
                 <span
-                  className={`absolute block w-5 h-0.5 bg-gray-600 group-hover:bg-blue-600 transition-all duration-300 ${
+                  className={`absolute block w-5 h-0.5 bg-gray-700 group-hover:bg-blue-600 transition-all duration-300 ${
                     menuOpen
                       ? "rotate-45 translate-y-0"
                       : "rotate-0 -translate-y-1.5"
                   }`}
                 ></span>
                 <span
-                  className={`absolute block w-5 h-0.5 bg-gray-600 group-hover:bg-blue-600 transition-all duration-300 ${
+                  className={`absolute block w-5 h-0.5 bg-gray-700 group-hover:bg-blue-600 transition-all duration-300 ${
                     menuOpen ? "opacity-0" : "opacity-100"
                   }`}
                 ></span>
                 <span
-                  className={`absolute block w-5 h-0.5 bg-gray-600 group-hover:bg-blue-600 transition-all duration-300 ${
+                  className={`absolute block w-5 h-0.5 bg-gray-700 group-hover:bg-blue-600 transition-all duration-300 ${
                     menuOpen
                       ? "-rotate-45 translate-y-0"
                       : "rotate-0 translate-y-1.5"
@@ -219,6 +243,7 @@ const Navbar = () => {
               {navigationItems.map((item, index) => {
                 const IconComponent = item.icon;
                 const isActive = location.pathname === item.path;
+                const isPendingPurchases = item.path === "/pending-purchases";
 
                 return (
                   <button
@@ -227,7 +252,7 @@ const Navbar = () => {
                       setMenuOpen(false);
                       item.onClick();
                     }}
-                    className={`w-full flex items-center gap-4 px-4 py-3 transition-all duration-200 ${
+                    className={`w-full relative flex items-center gap-4 px-4 py-3 transition-all duration-200 ${
                       isActive
                         ? "bg-gradient-to-r from-blue-50 to-indigo-50 text-blue-700 border-l-4 border-blue-500"
                         : "text-gray-700 hover:bg-gray-50"
@@ -244,7 +269,17 @@ const Navbar = () => {
                       <IconComponent size={16} />
                     </div>
                     <span className="font-medium text-sm">{item.label}</span>
-                    {isActive && (
+
+                    {/* Pending Purchases Counter Badge for Mobile */}
+                    {isPendingPurchases && pendingPurchases.length > 0 && (
+                      <div className="ml-auto bg-gradient-to-r from-red-500 to-pink-500 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center shadow-lg animate-pulse">
+                        {pendingPurchases.length > 99
+                          ? "99+"
+                          : pendingPurchases.length}
+                      </div>
+                    )}
+
+                    {isActive && !isPendingPurchases && (
                       <div className="ml-auto w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
                     )}
                   </button>
@@ -306,42 +341,58 @@ const Navbar = () => {
 
       {/* Desktop Navigation Bar */}
       <div
-        className={`hidden md:block px-6 lg:px-8 border-b border-gray-200 py-3 shadow-sm ${
+        className={`hidden md:block fixed top-0 left-0 right-0 z-50 px-6 lg:px-8 border-b border-gray-200/60 py-4 shadow-lg backdrop-blur-lg ${
           isCourseListPage
-            ? "bg-white"
-            : "bg-gradient-to-r from-blue-50 via-indigo-50 to-purple-50"
+            ? "bg-white/98"
+            : "bg-gradient-to-r from-blue-50/98 via-indigo-50/98 to-purple-50/98"
         }`}
+        style={{ backdropFilter: "blur(20px)" }}
       >
         <div className="flex items-center justify-between">
           {/* Logo Section */}
           <div className="flex items-center gap-4 min-w-0 flex-1">
-            <Link to="/" className="flex items-center min-w-0">
+            <Link to="/" className="flex items-center min-w-0 group">
               <img
                 onClick={() => navigate("/")}
                 src={assets.edulecta}
                 alt="Edulecta Logo"
-                className="w-28 lg:w-32 cursor-pointer hover:opacity-80 transition-opacity duration-200"
+                className="w-32 lg:w-36 cursor-pointer transition-all duration-300 transform group-hover:scale-105 drop-shadow-sm"
               />
             </Link>
           </div>
 
           {/* Desktop Navigation Links */}
-          <div className="hidden xl:flex items-center gap-8 mr-15">
+          <div className="hidden xl:flex items-center gap-6 mr-8">
             {navigationItems.map((item) => {
               const IconComponent = item.icon;
               const isActive = location.pathname === item.path;
+              const isPendingPurchases = item.path === "/pending-purchases";
               return (
                 <button
                   key={item.path}
                   onClick={item.onClick}
-                  className={`flex items-center gap-2 px-3 py-2 rounded-lg font-medium transition-all duration-200 ${
+                  className={`group relative flex items-center gap-2 px-4 py-2.5 rounded-xl font-medium transition-all duration-300 transform hover:scale-105 ${
                     isActive
-                      ? "bg-blue-600 text-white shadow-md"
-                      : "text-gray-600 hover:text-blue-600 hover:bg-blue-50"
+                      ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg shadow-blue-500/30"
+                      : "text-gray-700 hover:text-blue-600 hover:bg-white/80 hover:shadow-md border border-transparent hover:border-blue-200"
                   }`}
                 >
-                  <IconComponent size={16} />
-                  <span className="text-sm">{item.label}</span>
+                  <IconComponent
+                    size={18}
+                    className={`transition-transform duration-300 ${
+                      isActive ? "" : "group-hover:scale-110"
+                    }`}
+                  />
+                  <span className="text-sm font-semibold">{item.label}</span>
+
+                  {/* Pending Purchases Counter Badge */}
+                  {isPendingPurchases && pendingPurchases.length > 0 && (
+                    <div className="absolute -top-2 -right-2 bg-gradient-to-r from-red-500 to-pink-500 text-white text-xs font-bold rounded-full w-6 h-6 flex items-center justify-center shadow-lg animate-pulse">
+                      {pendingPurchases.length > 99
+                        ? "99+"
+                        : pendingPurchases.length}
+                    </div>
+                  )}
                 </button>
               );
             })}
@@ -349,37 +400,50 @@ const Navbar = () => {
             {/* Educator Button */}
             <button
               onClick={becomeEducator}
-              className={`flex items-center gap-2 px-3 py-2 rounded-lg font-medium transition-all duration-200 ${
+              className={`group flex items-center gap-2 px-4 py-2.5 rounded-xl font-medium transition-all duration-300 transform hover:scale-105 ${
                 location.pathname === "/educator"
-                  ? "bg-blue-600 text-white shadow-md"
-                  : "text-gray-600 hover:text-blue-600 hover:bg-blue-50"
+                  ? "bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-lg shadow-purple-500/30"
+                  : "text-gray-700 hover:text-purple-600 hover:bg-white/80 hover:shadow-md border border-transparent hover:border-purple-200"
               }`}
             >
-              <FiUsers size={16} />
-              <span className="text-sm">
-                {isEducator ? "Educator Dashboard" : "Become Educator"}
+              <FiUsers
+                size={18}
+                className={`transition-transform duration-300 ${
+                  location.pathname === "/educator"
+                    ? ""
+                    : "group-hover:scale-110"
+                }`}
+              />
+              <span className="text-sm font-semibold">
+                {isEducator ? "Dashboard" : "Teach"}
               </span>
             </button>
           </div>
 
           {/* User Section */}
-          <div className="flex items-center gap-4 flex-shrink-0">
+          <div className="flex items-center gap-3 flex-shrink-0">
             {/* Cart Icon - Enhanced for Desktop */}
             <button
               onClick={toggleCartDrawer}
-              className="relative p-3 rounded-xl hover:bg-blue-50 transition-all duration-300 border border-gray-200 hover:border-blue-300 group shadow-sm hover:shadow-md"
+              className={`relative p-3 rounded-xl transition-all duration-300 group transform hover:scale-105 ${
+                cartVibrating ? "animate-bounce" : ""
+              } ${
+                cartItems.length > 0
+                  ? "bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 hover:border-blue-300 shadow-md hover:shadow-lg"
+                  : "bg-white/80 border border-gray-200 hover:border-gray-300 shadow-sm hover:shadow-md"
+              }`}
             >
-              <FiShoppingBag className="w-6 h-6 text-gray-600 group-hover:text-blue-600 group-hover:scale-110 transition-all duration-200" />
+              <FiShoppingBag
+                className={`w-6 h-6 transition-all duration-300 ${
+                  cartItems.length > 0
+                    ? "text-blue-600 group-hover:text-blue-700"
+                    : "text-gray-600 group-hover:text-blue-600"
+                } group-hover:scale-110`}
+              />
               {cartItems.length > 0 && (
-                <>
-                  <span className="absolute -top-2 -right-2 bg-gradient-to-r from-red-500 to-pink-500 text-white text-xs rounded-full w-7 h-7 flex items-center justify-center font-bold animate-pulse border-2 border-white shadow-lg">
-                    {cartItems.length > 9 ? "9+" : cartItems.length}
-                  </span>
-                  <span className="absolute -top-2 -right-2 bg-red-400 rounded-full w-7 h-7 animate-ping"></span>
-                </>
-              )}
-              {cartItems.length === 0 && (
-                <span className="absolute -top-1 -right-1 w-3 h-3 bg-gray-300 rounded-full opacity-60"></span>
+                <span className="absolute -top-2 -right-2 bg-gradient-to-r from-red-500 to-pink-500 text-white text-xs rounded-full w-7 h-7 flex items-center justify-center font-bold border-2 border-white shadow-lg animate-pulse">
+                  {cartItems.length > 9 ? "9+" : cartItems.length}
+                </span>
               )}
             </button>
 

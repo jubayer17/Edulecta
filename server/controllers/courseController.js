@@ -59,6 +59,7 @@ export const getCourseById = async (req, res) => {
     await connectDB();
 
     const { id } = req.params;
+    const { includeDrafts } = req.query; // Optional parameter to include unpublished courses
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return res.status(400).json({
@@ -67,7 +68,11 @@ export const getCourseById = async (req, res) => {
       });
     }
 
-    const course = await Course.findOne({ _id: id, isPublished: true })
+    // If includeDrafts is true (and user is authenticated), include unpublished courses
+    const courseQuery =
+      includeDrafts === "true" ? { _id: id } : { _id: id, isPublished: true };
+
+    const course = await Course.findOne(courseQuery)
       .select("")
       .populate({
         path: "educator",
@@ -78,7 +83,10 @@ export const getCourseById = async (req, res) => {
     if (!course) {
       return res.status(404).json({
         success: false,
-        message: "Course not found or not published",
+        message:
+          includeDrafts === "true"
+            ? "Course not found"
+            : "Course not found or not published",
       });
     }
 

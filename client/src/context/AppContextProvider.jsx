@@ -1,5 +1,5 @@
 /* eslint-disable no-unused-vars */
-import { useEffect, useState, useCallback, useMemo } from "react";
+import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { AppContext } from "./AppContext";
 import { useNavigate } from "react-router-dom";
 import humanizeDuration from "humanize-duration";
@@ -14,8 +14,22 @@ export const AppContextProvider = ({ children }) => {
   const [isEducator, setIsEducator] = useState(false);
   const [enrolledCourses, setEnrolledCourses] = useState([]);
   const [userData, setUserData] = useState(null);
-  const [cartItems, setCartItems] = useState([]);
+  const [cartItems, setCartItems] = useState(() => {
+    // Initialize cart from localStorage
+    try {
+      const savedCart = localStorage.getItem("edulecta_cart");
+      return savedCart ? JSON.parse(savedCart) : [];
+    } catch (error) {
+      console.error("Error loading cart from localStorage:", error);
+      return [];
+    }
+  });
   const [isCartDrawerOpen, setIsCartDrawerOpen] = useState(false);
+  const [cartVibrating, setCartVibrating] = useState(false);
+  const [pendingPurchasesCount, setPendingPurchasesCount] = useState(0);
+  const [pendingPurchases, setPendingPurchases] = useState([]);
+  const [pendingPurchasesLoading, setPendingPurchasesLoading] = useState(false);
+  const hasInitialized = useRef(false);
   const [educatorDashboard, setEducatorDashboard] = useState({
     totalEarnings: 0,
     enrolledStudents: 0,
@@ -37,8 +51,17 @@ export const AppContextProvider = ({ children }) => {
   const { getToken } = useAuth();
   const { user } = useUser();
 
+  // Save cart to localStorage whenever cartItems changes
+  useEffect(() => {
+    try {
+      localStorage.setItem("edulecta_cart", JSON.stringify(cartItems));
+    } catch (error) {
+      console.error("Error saving cart to localStorage:", error);
+    }
+  }, [cartItems]);
+
   // Fetch all courses
-  const fetchAllCourses = async () => {
+  const fetchAllCourses = useCallback(async () => {
     try {
       setAllCourses([]);
       const { data } = await axios.get(`${backendUrl}/api/course/all`);
@@ -51,7 +74,7 @@ export const AppContextProvider = ({ children }) => {
       console.error("Error fetching courses:", error);
       toast.error(error.message || "Failed to fetch courses");
     }
-  };
+  }, [backendUrl]);
 
   // Fetch enrolled courses
   const fetchUserEnrolledCourses = async () => {
@@ -79,7 +102,7 @@ export const AppContextProvider = ({ children }) => {
   };
 
   // Fetch user profile
-  const fetchUserData = async () => {
+  const fetchUserData = useCallback(async () => {
     try {
       const token = await getToken();
       if (!token) return;
@@ -100,7 +123,7 @@ export const AppContextProvider = ({ children }) => {
       console.error("Error fetching user data:", error);
       setEnrolledCourses([]);
     }
-  };
+  }, [backendUrl, getToken, user?.publicMetadata?.role]);
   console.log(userData);
 
   // Memoized full enrolled courses
@@ -113,7 +136,7 @@ export const AppContextProvider = ({ children }) => {
   }, [enrolledCourses, allCourses]);
 
   //get educator info
-  const fetchEducatorDashboard = async () => {
+  const fetchEducatorDashboard = useCallback(async () => {
     try {
       const token = await getToken();
       console.log(token);
@@ -125,16 +148,17 @@ export const AppContextProvider = ({ children }) => {
 
       if (data.success) {
         setEducatorDashboard(data.data);
-        toast.success("Educator dashboard fetched successfully!");
+        // Removed toast message to prevent spam
+        console.log("Educator dashboard fetched successfully");
       }
     } catch (error) {
       console.error("Error fetching educator dashboard:", error);
     }
-  };
+  }, [backendUrl, getToken]);
   console.log("Educator Dashboard:", educatorDashboard);
 
   // Educator dashboard calculation & sync function
-  const syncEducatorDashboard = async () => {
+  const syncEducatorDashboard = useCallback(async () => {
     if (!isEducator) return;
 
     try {
@@ -160,8 +184,250 @@ export const AppContextProvider = ({ children }) => {
       console.error("Error syncing dashboard:", error);
       toast.error(error.response?.data?.message || "Dashboard sync failed");
     }
-  };
+  }, [backendUrl, getToken, isEducator]);
   console.log("Sync Educator Data:", syncEducatorData);
+
+  // Toggle course publication status
+  const toggleCoursePublication = useCallback(
+    async (courseId) => {
+      if (!isEducator) return { success: false, error: "Not an educator" };
+
+      try {
+        const token = await getToken();
+        if (!token) return { success: false, error: "No authentication token" };
+
+        console.log(`🔄 Toggling publication status for course: ${courseId}`);
+
+        const { data } = await axios.patch(
+          `${backendUrl}/api/educator/toggle-publication/${courseId}`,
+          {}, // no body needed
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+
+        if (data.success) {
+          console.log(`✅ Course publication toggled:`, data.course);
+
+          // Refresh the educator dashboard to get updated data
+          await syncEducatorDashboard();
+
+          toast.success(data.message);
+          return { success: true, course: data.course };
+        } else {
+          toast.error(data.error || "Failed to toggle course publication");
+          return { success: false, error: data.error };
+        }
+      } catch (error) {
+        console.error("Error toggling course publication:", error);
+        const errorMessage =
+          error.response?.data?.error ||
+          error.message ||
+          "Failed to toggle course publication";
+        toast.error(errorMessage);
+        return { success: false, error: errorMessage };
+      }
+    },
+    [backendUrl, getToken, isEducator, syncEducatorDashboard]
+  );
+
+  // Handle cart checkout with multiple courses
+  const purchaseCart = useCallback(
+    async (cartItems) => {
+      if (!user || !cartItems || cartItems.length === 0) {
+        return {
+          success: false,
+          error: "Invalid cart data or user not authenticated",
+        };
+      }
+
+      try {
+        const token = await getToken();
+        if (!token) {
+          return { success: false, error: "No authentication token" };
+        }
+
+        console.log(
+          `🛒 Starting cart checkout with ${cartItems.length} courses`
+        );
+
+        // Extract course IDs from cart items
+        const courseIds = cartItems.map((item) => item._id);
+
+        const { data } = await axios.post(
+          `${backendUrl}/api/user/purchase-cart`,
+          { courseIds },
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+
+        if (data.success) {
+          console.log(`✅ Cart checkout session created:`, data);
+          return {
+            success: true,
+            sessionUrl: data.sessionUrl,
+            sessionId: data.sessionId,
+            totalAmount: data.totalAmount,
+            courseCount: data.courseCount,
+          };
+        } else {
+          console.error("❌ Cart checkout failed:", data);
+          return { success: false, error: data.error };
+        }
+      } catch (error) {
+        console.error("Error during cart checkout:", error);
+        const errorMessage =
+          error.response?.data?.error ||
+          error.message ||
+          "Failed to process cart checkout";
+        return { success: false, error: errorMessage };
+      }
+    },
+    [backendUrl, getToken, user]
+  );
+
+  // Fetch pending purchases count
+  const fetchPendingPurchasesCount = useCallback(async () => {
+    console.log("🔄 fetchPendingPurchasesCount called", {
+      user: !!user,
+      userData: !!userData,
+    });
+
+    if (!user) {
+      console.log("❌ No user, skipping pending purchases fetch");
+      return;
+    }
+
+    try {
+      const token = await getToken();
+      if (!token) {
+        console.log("❌ No token, skipping pending purchases fetch");
+        return;
+      }
+
+      console.log("📡 Fetching pending purchases count...");
+      const { data } = await axios.get(
+        `${backendUrl}/api/user/pending-purchases-count`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      console.log("📊 Pending purchases response:", data);
+      if (data.success) {
+        console.log("📊 Pending purchases debug:", data.debug);
+        console.log("📊 Setting count to:", data.count);
+        setPendingPurchasesCount(data.count || 0);
+      }
+    } catch (error) {
+      console.error("Error fetching pending purchases count:", error);
+      // Don't show error toast for this as it's background data
+      setPendingPurchasesCount(0);
+    }
+  }, [user, userData, getToken, backendUrl]);
+
+  // Fetch pending purchases with full details
+  const fetchPendingPurchases = useCallback(async () => {
+    if (!user) {
+      console.log("❌ No user, skipping pending purchases fetch");
+      return;
+    }
+
+    setPendingPurchasesLoading(true);
+    try {
+      const token = await getToken();
+      if (!token) {
+        console.log("❌ No token, skipping pending purchases fetch");
+        return;
+      }
+
+      console.log("📡 Fetching pending purchases...");
+      const { data } = await axios.get(`${backendUrl}/api/user/purchases`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      // Filter and format pending purchases
+      const pendingPurchases = data.purchases
+        .filter((purchase) =>
+          ["pending", "incomplete", "failed"].includes(purchase.status)
+        )
+        .filter((purchase) => purchase.courseId); // Only include purchases with valid courseId
+
+      console.log("📊 Raw pending purchases:", pendingPurchases.length);
+
+      // Get course details for each purchase
+      const purchasesWithDetails = await Promise.all(
+        pendingPurchases.map(async (purchase) => {
+          if (!purchase.courseId) return purchase;
+
+          // Extract courseId string - handle both string and populated object cases
+          const courseId =
+            typeof purchase.courseId === "string"
+              ? purchase.courseId
+              : purchase.courseId._id || purchase.courseId.toString();
+
+          console.log(
+            `🔍 Processing purchase with courseId:`,
+            `Type: ${typeof purchase.courseId}, Value: ${courseId}`
+          );
+
+          try {
+            const courseResponse = await axios.get(
+              `${backendUrl}/api/course/${courseId}?includeDrafts=true`,
+              { headers: { Authorization: `Bearer ${token}` } }
+            );
+
+            if (courseResponse.data.success && courseResponse.data.course) {
+              return {
+                ...purchase,
+                courseDetails: courseResponse.data.course,
+              };
+            } else {
+              console.log(
+                `No course data found for ${courseId}:`,
+                courseResponse.data
+              );
+              // Return purchase without course details if course not found
+              return {
+                ...purchase,
+                courseDetails: {
+                  courseTitle: "Course Not Found",
+                  courseDescription:
+                    "This course may have been removed or unpublished",
+                  coursePrice: purchase.amount || 0,
+                },
+              };
+            }
+          } catch (error) {
+            console.error(
+              `Error fetching course details for ${courseId}:`,
+              error.response?.data || error.message
+            );
+            // Return purchase with fallback course details if API call fails
+            return {
+              ...purchase,
+              courseDetails: {
+                courseTitle: "Course Unavailable",
+                courseDescription: "Unable to load course details",
+                coursePrice: purchase.amount || 0,
+              },
+            };
+          }
+        })
+      );
+
+      // Keep all purchases - even those with fallback course details
+      console.log(
+        "📊 Pending purchases with details:",
+        purchasesWithDetails.length
+      );
+      setPendingPurchases(purchasesWithDetails);
+
+      // Update the count based on actual purchases
+      setPendingPurchasesCount(purchasesWithDetails.length);
+    } catch (error) {
+      console.error("Error fetching pending purchases:", error);
+      setPendingPurchases([]);
+      setPendingPurchasesCount(0);
+    } finally {
+      setPendingPurchasesLoading(false);
+    }
+  }, [user, getToken, backendUrl]);
 
   //update course by id
   const updateCourse = async (updatedCourse) => {
@@ -194,7 +460,7 @@ export const AppContextProvider = ({ children }) => {
   };
 
   //   // Get Enrolled Students Info
-  const enrolledStudentsInfo = async () => {
+  const enrolledStudentsInfo = useCallback(async () => {
     if (!isEducator) return;
 
     try {
@@ -209,7 +475,7 @@ export const AppContextProvider = ({ children }) => {
       if (data.enrolledStudentsData) {
         setEnrolledStudentInfo(data.enrolledStudentsData);
         // console.log("Enrolled Students Info:", data.enrolledStudentsData);
-        toast.success("Enrolled students fetched successfully!");
+        console.log("Enrolled students fetched successfully");
       } else {
         toast.error(data.message || "Failed to fetch enrolled students");
       }
@@ -219,7 +485,7 @@ export const AppContextProvider = ({ children }) => {
         error.response?.data?.message || "Failed to fetch enrolled students"
       );
     }
-  };
+  }, [backendUrl, getToken, isEducator]);
 
   console.log("Enrolled Students Info:", enrolledStudentInfo);
 
@@ -298,24 +564,44 @@ export const AppContextProvider = ({ children }) => {
     return `${secs}s`;
   };
 
-  // Initialize
+  // Initialize courses immediately when app loads (no auth required)
   useEffect(() => {
-    if (!user) return;
-    const init = async () => {
-      await fetchUserData();
-      await fetchAllCourses();
-      await fetchEducatorDashboard();
+    fetchAllCourses();
+  }, [fetchAllCourses]); // Run when fetchAllCourses changes
 
-      if (user?.publicMetadata?.role === "educator")
+  // Initialize user-specific data when user changes
+  useEffect(() => {
+    if (!user) {
+      hasInitialized.current = false; // Reset when user logs out
+      return;
+    }
+
+    if (hasInitialized.current) return; // Prevent multiple calls
+
+    const init = async () => {
+      hasInitialized.current = true;
+      await fetchUserData();
+      await fetchEducatorDashboard();
+      await fetchPendingPurchases(); // Use the full fetch instead of just count
+
+      if (user?.publicMetadata?.role === "educator") {
         await syncEducatorDashboard();
+      }
     };
     init();
-  }, [user]);
+  }, [
+    user,
+    fetchUserData,
+    fetchEducatorDashboard,
+    syncEducatorDashboard,
+    fetchPendingPurchases,
+  ]);
+
   useEffect(() => {
-    if (isEducator) {
+    if (isEducator && hasInitialized.current) {
       enrolledStudentsInfo();
     }
-  }, [isEducator]);
+  }, [isEducator, enrolledStudentsInfo]);
 
   // Cart functions
   const addToCart = (course) => {
@@ -325,7 +611,6 @@ export const AppContextProvider = ({ children }) => {
     const existingItem = cartItems.find((item) => item._id === course._id);
     if (existingItem) {
       toast.info("Course is already in your cart!");
-      setIsCartDrawerOpen(true); // Open drawer to show existing items
       return;
     }
 
@@ -340,7 +625,14 @@ export const AppContextProvider = ({ children }) => {
 
     setCartItems((prev) => [...prev, course]);
     toast.success("Course added to cart!");
-    // Don't auto-open drawer here - let CourseCard handle it
+
+    // Trigger vibration effect
+    triggerCartVibration();
+  };
+
+  const triggerCartVibration = () => {
+    setCartVibrating(true);
+    setTimeout(() => setCartVibrating(false), 600); // Vibrate for 600ms
   };
 
   const removeFromCart = (courseId) => {
@@ -400,6 +692,7 @@ export const AppContextProvider = ({ children }) => {
     fetchAllCourses,
     fetchUserData,
     syncEducatorDashboard, // <--- call this anywhere to push totals to DB
+    toggleCoursePublication, // <--- toggle course publication status
     educatorDashboard,
     // Cart functionality
     cartItems,
@@ -409,7 +702,25 @@ export const AppContextProvider = ({ children }) => {
     isCartDrawerOpen,
     toggleCartDrawer,
     getCartTotal,
+    cartVibrating,
+    triggerCartVibration,
+    purchaseCart, // Added cart checkout function
+    // Pending purchases
+    pendingPurchasesCount,
+    pendingPurchases,
+    pendingPurchasesLoading,
+    fetchPendingPurchases,
+    fetchPendingPurchasesCount,
   };
+
+  // Add to window for debugging
+  if (typeof window !== "undefined") {
+    window.debugPendingPurchases = fetchPendingPurchases;
+    window.forcePendingUpdate = () => {
+      console.log("🔄 Force updating pending purchases...");
+      fetchPendingPurchases();
+    };
+  }
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
 };

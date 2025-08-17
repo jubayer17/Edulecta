@@ -8,113 +8,162 @@ import {
   FiDollarSign,
   FiCalendar,
   FiAlertCircle,
+  FiLoader,
 } from "react-icons/fi";
 import { toast } from "react-toastify";
 
 const PendingPurchases = () => {
-  const [purchases, setPurchases] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const { backendUrl, getToken } = useContext(AppContext);
+  const {
+    pendingPurchases,
+    pendingPurchasesLoading,
+    fetchPendingPurchases,
+    backendUrl,
+    getToken,
+  } = useContext(AppContext);
 
-  const fetchPendingPurchases = async () => {
-    try {
-      const token = await getToken();
-      const { data } = await axios.get(`${backendUrl}/api/user/purchases`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-
-      // Filter and format pending purchases
-      const pendingPurchases = data.purchases
-        .filter((purchase) =>
-          ["pending", "incomplete", "failed"].includes(purchase.status)
-        )
-        .filter((purchase) => purchase.courseId); // Only include purchases with valid courseId
-
-      // Get course details for each purchase
-      const purchasesWithDetails = await Promise.all(
-        pendingPurchases.map(async (purchase) => {
-          if (!purchase.courseId) return purchase;
-
-          try {
-            const courseResponse = await axios.get(
-              `${backendUrl}/api/course/get-course/${purchase.courseId}`,
-              { headers: { Authorization: `Bearer ${token}` } }
-            );
-
-            if (courseResponse.data.success && courseResponse.data.course) {
-              return {
-                ...purchase,
-                courseDetails: courseResponse.data.course,
-              };
-            }
-            console.log(`No course data found for ${purchase.courseId}`);
-            return purchase;
-          } catch (error) {
-            console.error(
-              `Error fetching course details for ${purchase.courseId}:`,
-              error
-            );
-            return purchase;
-          }
-        })
-      );
-
-      // Filter out any purchases without course details
-      const validPurchases = purchasesWithDetails.filter(
-        (purchase) =>
-          purchase.courseId &&
-          (purchase.courseDetails || purchase.courseId?.courseTitle)
-      );
-
-      setPurchases(validPurchases);
-    } catch (error) {
-      toast.error("Failed to fetch pending purchases");
-      console.error("Error fetching purchases:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
+  // Loading states for individual buttons
+  const [loadingButtons, setLoadingButtons] = useState({});
 
   useEffect(() => {
     fetchPendingPurchases();
-  }, []);
+  }, [fetchPendingPurchases]);
+
+  // Debug logging
+  console.log("🔍 Pending Purchases Debug:", {
+    pendingPurchases,
+    pendingPurchasesLoading,
+    count: pendingPurchases?.length,
+  });
 
   const handleRetryPayment = async (purchaseId) => {
     try {
+      console.log(`🔄 Starting payment retry for purchase: ${purchaseId}`);
+
+      // Set loading state for this specific button
+      setLoadingButtons((prev) => ({ ...prev, [`retry-${purchaseId}`]: true }));
+
       const token = await getToken();
+      if (!token) {
+        toast.error("Authentication required. Please sign in again.");
+        return;
+      }
+
+      // Show loading state
+      toast.info("Creating new payment session...");
+
       const { data } = await axios.post(
         `${backendUrl}/api/user/retry-payment/${purchaseId}`,
-        {},
-        { headers: { Authorization: `Bearer ${token}` } }
+        {}, // Empty body
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+        }
       );
 
+      console.log("🎯 Retry payment response:", data);
+
       if (data.success && data.sessionUrl) {
-        window.location.href = data.sessionUrl;
+        console.log(`✅ New Stripe session created: ${data.sessionId}`);
+        console.log(`🔗 Redirecting to: ${data.sessionUrl}`);
+
+        // Dismiss any existing toasts
+        toast.dismiss();
+        toast.success("Payment session created! Redirecting to Stripe...");
+
+        // Small delay to show success message, then redirect
+        setTimeout(() => {
+          window.location.href = data.sessionUrl;
+        }, 1000);
       } else {
-        toast.error("Failed to create payment session");
+        console.error("❌ No session URL in response:", data);
+        toast.error(
+          data.error || "Failed to create payment session. Please try again."
+        );
       }
     } catch (error) {
-      toast.error("Failed to retry payment");
-      console.error("Error retrying payment:", error);
+      console.error("❌ Error retrying payment:", error);
+      const errorMessage =
+        error.response?.data?.error ||
+        error.message ||
+        "Failed to retry payment";
+      toast.error(errorMessage);
+    } finally {
+      // Clear loading state
+      setLoadingButtons((prev) => ({
+        ...prev,
+        [`retry-${purchaseId}`]: false,
+      }));
     }
   };
 
   const handleCancelPurchase = async (purchaseId) => {
+    // Show confirmation dialog
+    if (
+      !window.confirm(
+        "Are you sure you want to cancel this purchase? This action cannot be undone."
+      )
+    ) {
+      return;
+    }
+
     try {
+      console.log(`🚫 Cancelling purchase: ${purchaseId}`);
+
+      // Set loading state for this specific button
+      setLoadingButtons((prev) => ({
+        ...prev,
+        [`cancel-${purchaseId}`]: true,
+      }));
+
       const token = await getToken();
+      if (!token) {
+        toast.error("Authentication required. Please sign in again.");
+        return;
+      }
+
+      // Show loading state
+      toast.info("Cancelling purchase...");
+
       const { data } = await axios.post(
         `${backendUrl}/api/user/cancel-payment/${purchaseId}`,
-        {},
-        { headers: { Authorization: `Bearer ${token}` } }
+        {}, // Empty body
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+        }
       );
+
+      console.log("🎯 Cancel payment response:", data);
 
       if (data.success) {
         toast.success("Purchase cancelled successfully");
-        fetchPendingPurchases(); // Refresh the list
+        console.log(`✅ Purchase ${purchaseId} cancelled successfully`);
+
+        // Refresh the pending purchases list to show updated data
+        await fetchPendingPurchases();
+      } else {
+        console.error("❌ Failed to cancel purchase:", data);
+        toast.error(
+          data.error || "Failed to cancel purchase. Please try again."
+        );
       }
     } catch (error) {
-      toast.error("Failed to cancel purchase");
-      console.error("Error cancelling purchase:", error);
+      console.error("❌ Error cancelling purchase:", error);
+      const errorMessage =
+        error.response?.data?.error ||
+        error.message ||
+        "Failed to cancel purchase";
+      toast.error(errorMessage);
+    } finally {
+      // Clear loading state
+      setLoadingButtons((prev) => ({
+        ...prev,
+        [`cancel-${purchaseId}`]: false,
+      }));
     }
   };
 
@@ -131,17 +180,17 @@ const PendingPurchases = () => {
     }
   };
 
-  if (loading) {
+  if (pendingPurchasesLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-r from-blue-50 via-indigo-50 to-purple-50 p-6">
-        <div className="max-w-6xl mx-auto">
+      <div className="min-h-screen bg-gradient-to-r from-blue-50 via-indigo-50 to-purple-50 p-3 sm:p-6">
+        <div className="max-w-4xl mx-auto">
           <div className="animate-pulse space-y-4">
-            <div className="h-8 bg-gray-200 rounded w-1/4"></div>
+            <div className="h-6 sm:h-8 bg-gray-200 rounded w-1/2 sm:w-1/4"></div>
             <div className="space-y-3">
               {[1, 2, 3].map((i) => (
                 <div
                   key={i}
-                  className="h-32 bg-white rounded-lg shadow-sm"
+                  className="h-32 sm:h-40 bg-white rounded-lg shadow-sm"
                 ></div>
               ))}
             </div>
@@ -152,116 +201,156 @@ const PendingPurchases = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-r from-blue-50 via-indigo-50 to-purple-50 p-6">
-      <div className="max-w-6xl mx-auto">
-        <div className="mb-8">
-          <h1 className="text-2xl font-bold text-gray-800 mb-2">
+    <div className="min-h-screen bg-gradient-to-r from-blue-50 via-indigo-50 to-purple-50 p-3 sm:p-6 pt-20">
+      <div className="max-w-4xl mx-auto">
+        <div className="mb-6 sm:mb-8 pt-4">
+          <h1 className="text-xl sm:text-2xl font-bold text-gray-800 mb-2">
             Pending Purchases
           </h1>
-          <p className="text-gray-600">
+          <p className="text-gray-600 text-sm sm:text-base">
             Manage your incomplete course purchases
           </p>
         </div>
 
-        {purchases.length === 0 ? (
-          <div className="bg-white rounded-xl shadow-sm p-8 text-center">
+        {pendingPurchases.length === 0 ? (
+          <div className="bg-white rounded-xl shadow-sm p-6 sm:p-8 text-center">
             <FiAlertCircle className="mx-auto text-gray-400 mb-4" size={48} />
-            <h3 className="text-xl font-semibold text-gray-800 mb-2">
+            <h3 className="text-lg sm:text-xl font-semibold text-gray-800 mb-2">
               No Pending Purchases
             </h3>
-            <p className="text-gray-600">
+            <p className="text-gray-600 text-sm sm:text-base max-w-md mx-auto">
               You don't have any pending or incomplete purchases at the moment.
+              All your purchases are either completed or have been cancelled.
             </p>
           </div>
         ) : (
-          <div className="space-y-4">
-            {purchases.map((purchase) => (
+          <div className="space-y-4 sm:space-y-6">
+            {pendingPurchases.map((purchase) => (
               <div
                 key={purchase._id}
-                className="bg-white rounded-xl shadow-sm p-6 transition-all hover:shadow-md"
+                className="bg-white rounded-xl shadow-sm p-4 sm:p-6 transition-all hover:shadow-md"
               >
-                <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-3 mb-2">
-                      <div className="flex-1">
+                {/* Mobile-first responsive layout */}
+                <div className="space-y-4">
+                  {/* Course Info Section */}
+                  <div className="flex items-start gap-3">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
                         <h3 className="text-lg font-semibold text-gray-800 truncate">
                           {purchase.courseDetails?.courseTitle ||
                             purchase.courseId?.courseTitle ||
                             "Course Title Not Available"}
                         </h3>
-                        <p className="text-sm text-gray-500 mt-1 truncate">
-                          {purchase.courseDetails?.courseDescription || ""}
-                        </p>
-                      </div>
-                      <span
-                        className={`flex-shrink-0 px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(
-                          purchase.status
-                        )}`}
-                      >
-                        {purchase.status.charAt(0).toUpperCase() +
-                          purchase.status.slice(1)}
-                      </span>
-                    </div>
-
-                    <div className="flex flex-wrap gap-4 text-sm text-gray-600">
-                      <div className="flex items-center gap-2">
-                        <FiDollarSign className="text-blue-500" size={18} />
-                        <span className="font-medium">
-                          ${(purchase.amount || 0).toFixed(2)}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <FiCalendar className="text-blue-500" size={18} />
-                        <span>
-                          Created{" "}
-                          {purchase.purchaseDate
-                            ? new Date(
-                                purchase.purchaseDate
-                              ).toLocaleDateString(undefined, {
-                                year: "numeric",
-                                month: "long",
-                                day: "numeric",
-                                hour: "2-digit",
-                                minute: "2-digit",
-                              })
-                            : "Date not available"}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <FiClock className="text-blue-500" size={18} />
-                        <span>
-                          Updated{" "}
-                          {purchase.lastUpdated
-                            ? new Date(purchase.lastUpdated).toLocaleDateString(
-                                undefined,
-                                {
-                                  year: "numeric",
-                                  month: "long",
-                                  day: "numeric",
-                                  hour: "2-digit",
-                                  minute: "2-digit",
-                                }
-                              )
-                            : "Not available"}
+                        <span
+                          className={`self-start px-3 py-1 rounded-full text-sm font-medium whitespace-nowrap ${getStatusColor(
+                            purchase.status
+                          )}`}
+                        >
+                          {purchase.status.charAt(0).toUpperCase() +
+                            purchase.status.slice(1)}
                         </span>
                       </div>
                     </div>
                   </div>
 
-                  <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
+                  {/* Purchase Details */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm text-gray-600">
+                    <div className="flex items-center gap-2">
+                      <FiDollarSign
+                        className="text-blue-500 flex-shrink-0"
+                        size={18}
+                      />
+                      <span className="font-medium">
+                        ${(purchase.amount || 0).toFixed(2)}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <FiCalendar
+                        className="text-blue-500 flex-shrink-0"
+                        size={18}
+                      />
+                      <span className="truncate">
+                        Created{" "}
+                        {purchase.purchaseDate
+                          ? new Date(purchase.purchaseDate).toLocaleDateString(
+                              undefined,
+                              {
+                                year: "numeric",
+                                month: "short",
+                                day: "numeric",
+                              }
+                            )
+                          : "N/A"}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <FiClock
+                        className="text-blue-500 flex-shrink-0"
+                        size={18}
+                      />
+                      <span className="truncate">
+                        Updated{" "}
+                        {purchase.lastUpdated
+                          ? new Date(purchase.lastUpdated).toLocaleDateString(
+                              undefined,
+                              {
+                                year: "numeric",
+                                month: "short",
+                                day: "numeric",
+                              }
+                            )
+                          : "N/A"}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Action Buttons - Always visible and properly sized */}
+                  <div className="flex flex-col sm:flex-row gap-3 pt-3 border-t border-gray-100">
                     <button
                       onClick={() => handleRetryPayment(purchase._id)}
-                      className="flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                      disabled={
+                        loadingButtons[`retry-${purchase._id}`] ||
+                        loadingButtons[`cancel-${purchase._id}`]
+                      }
+                      className="flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      <FiRefreshCw size={16} />
-                      <span>Retry Payment</span>
+                      {loadingButtons[`retry-${purchase._id}`] ? (
+                        <>
+                          <FiLoader
+                            size={16}
+                            className="flex-shrink-0 animate-spin"
+                          />
+                          <span>Creating Session...</span>
+                        </>
+                      ) : (
+                        <>
+                          <FiRefreshCw size={16} className="flex-shrink-0" />
+                          <span>Complete Payment</span>
+                        </>
+                      )}
                     </button>
                     <button
                       onClick={() => handleCancelPurchase(purchase._id)}
-                      className="flex items-center justify-center gap-2 px-4 py-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors"
+                      disabled={
+                        loadingButtons[`retry-${purchase._id}`] ||
+                        loadingButtons[`cancel-${purchase._id}`]
+                      }
+                      className="flex items-center justify-center gap-2 px-4 py-2.5 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors text-sm font-medium border border-red-200 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      <FiXCircle size={16} />
-                      <span>Cancel</span>
+                      {loadingButtons[`cancel-${purchase._id}`] ? (
+                        <>
+                          <FiLoader
+                            size={16}
+                            className="flex-shrink-0 animate-spin"
+                          />
+                          <span>Cancelling...</span>
+                        </>
+                      ) : (
+                        <>
+                          <FiXCircle size={16} className="flex-shrink-0" />
+                          <span>Cancel Purchase</span>
+                        </>
+                      )}
                     </button>
                   </div>
                 </div>

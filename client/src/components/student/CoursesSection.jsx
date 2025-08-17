@@ -1,4 +1,4 @@
-import React, { useContext } from "react";
+import React, { useContext, useMemo } from "react";
 import { Link } from "react-router-dom";
 
 import CourseCard from "./CourseCard";
@@ -6,6 +6,12 @@ import { AppContext } from "../../context/AppContext";
 
 const CoursesSection = () => {
   const { allCourses } = useContext(AppContext);
+
+  // Filter to show only published courses (first 4)
+  const publishedCourses = useMemo(() => {
+    if (!allCourses?.length) return [];
+    return allCourses.filter((course) => course.isPublished).slice(0, 4);
+  }, [allCourses]);
 
   return (
     <section className="w-full max-w-7xl mx-auto px-6 sm:px-4 md:px-6">
@@ -52,7 +58,7 @@ const CoursesSection = () => {
 
       {/* Courses Grid - Better mobile padding */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6 px-2 sm:px-0">
-        {allCourses.slice(0, 4).map((course) => (
+        {publishedCourses.map((course) => (
           <div
             key={course._id}
             className="transform hover:scale-[1.02] transition duration-300 ease-in-out w-full max-w-[300px] mx-auto sm:max-w-none"

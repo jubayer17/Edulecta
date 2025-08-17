@@ -5,13 +5,13 @@ import {
   FiBookOpen,
   FiShoppingCart,
   FiUser,
-  FiPlus,
+  FiCompass,
 } from "react-icons/fi";
 import { AppContext } from "../../context/AppContext";
 
 const BottomNavigation = () => {
   const location = useLocation();
-  const { cartItems = [] } = useContext(AppContext);
+  const { cartItems = [], cartVibrating = false } = useContext(AppContext);
 
   const isActive = (path) => {
     if (path === "/") {
@@ -37,7 +37,7 @@ const BottomNavigation = () => {
     },
     {
       id: "explore",
-      icon: FiPlus,
+      icon: FiCompass,
       label: "Explore",
       path: "/course-list",
       color: "purple",
@@ -47,7 +47,7 @@ const BottomNavigation = () => {
       id: "cart",
       icon: FiShoppingCart,
       label: "Cart",
-      path: "/course-list", // Redirect to course list since no cart page exists yet
+      path: "/cart",
       color: "orange",
       badge: cartItems.length > 0 ? cartItems.length : null,
     },
@@ -114,6 +114,10 @@ const BottomNavigation = () => {
                       active
                         ? `bg-${item.color}-100 scale-110`
                         : "hover:bg-gray-100 hover:scale-105"
+                    } ${
+                      item.id === "cart" && cartVibrating
+                        ? "animate-bounce"
+                        : ""
                     }`}
                   >
                     <Icon

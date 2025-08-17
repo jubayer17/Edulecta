@@ -24,10 +24,12 @@ const Cart = () => {
     clearCart,
     getCartTotal,
     navigate,
-    calculateRating,
+    userData,
+    purchaseCart, // Added secure cart checkout function
   } = useContext(AppContext);
 
   const [removingItem, setRemovingItem] = useState(null);
+  const [isCheckoutLoading, setIsCheckoutLoading] = useState(false);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
 
   const handleRemoveItem = async (courseId) => {
@@ -49,14 +51,57 @@ const Cart = () => {
     }
   };
 
-  const handleCheckout = () => {
+  const handleCheckout = async () => {
     if (cartItems.length === 0) {
       toast.error("Your cart is empty!");
       return;
     }
-    // TODO: Implement Stripe checkout
-    toast.info("Redirecting to Stripe checkout...");
-    console.log("Proceeding to Stripe checkout...");
+
+    if (!userData) {
+      toast.warn("Please sign in to continue with checkout");
+      return;
+    }
+
+    setIsCheckoutLoading(true);
+
+    try {
+      console.log("🛒 Starting secure cart checkout...");
+      toast.info("Creating secure Stripe checkout session...");
+
+      // Use the secure cart checkout function
+      const result = await purchaseCart(cartItems);
+
+      if (result.success) {
+        console.log(
+          `✅ Checkout session created for ${result.courseCount} courses`
+        );
+        console.log(`💰 Total amount: $${result.totalAmount}`);
+
+        // Clear the cart since we're proceeding to payment
+        clearCart();
+
+        toast.success(
+          `Redirecting to secure checkout for ${result.courseCount} course${
+            result.courseCount > 1 ? "s" : ""
+          }...`
+        );
+
+        // Small delay to show success message, then redirect
+        setTimeout(() => {
+          window.location.href = result.sessionUrl;
+        }, 1500);
+      } else {
+        console.error("❌ Checkout failed:", result.error);
+        toast.error(
+          result.error || "Failed to create checkout session. Please try again."
+        );
+      }
+    } catch (error) {
+      console.error("❌ Checkout error:", error);
+      toast.error("An unexpected error occurred. Please try again.");
+    } finally {
+      setIsCheckoutLoading(false);
+    }
   };
 
   const formatPrice = (course) => {
@@ -79,7 +124,7 @@ const Cart = () => {
   };
 
   return (
-    <div className="pb-20 md:pb-0 bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 min-h-screen">
+    <div className="pb-20 md:pb-0 bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 min-h-screen pt-20">
       {/* Header Section - Enhanced */}
       <div className="bg-white shadow-sm border-b border-gray-100">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
@@ -117,10 +162,22 @@ const Cart = () => {
                 </div>
                 <button
                   onClick={handleCheckout}
-                  className="px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-semibold rounded-xl transition-all duration-300 transform hover:scale-105 flex items-center gap-2"
+                  disabled={isCheckoutLoading}
+                  className={`px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-semibold rounded-xl transition-all duration-300 transform hover:scale-105 flex items-center gap-2 ${
+                    isCheckoutLoading ? "opacity-75 cursor-not-allowed" : ""
+                  }`}
                 >
-                  <FiCreditCard className="w-5 h-5" />
-                  Quick Checkout
+                  {isCheckoutLoading ? (
+                    <>
+                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                      Creating Session...
+                    </>
+                  ) : (
+                    <>
+                      <FiCreditCard className="w-5 h-5" />
+                      Secure Checkout
+                    </>
+                  )}
                 </button>
               </div>
             )}
@@ -361,10 +418,22 @@ const Cart = () => {
                 {/* Checkout Button */}
                 <button
                   onClick={handleCheckout}
-                  className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold py-4 rounded-xl transition-all duration-300 transform hover:scale-105 flex items-center justify-center gap-3 shadow-lg mb-4"
+                  disabled={isCheckoutLoading}
+                  className={`w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold py-4 rounded-xl transition-all duration-300 transform hover:scale-105 flex items-center justify-center gap-3 shadow-lg mb-4 ${
+                    isCheckoutLoading ? "opacity-75 cursor-not-allowed" : ""
+                  }`}
                 >
-                  <FiCreditCard className="w-5 h-5" />
-                  Secure Checkout
+                  {isCheckoutLoading ? (
+                    <>
+                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                      Creating Secure Session...
+                    </>
+                  ) : (
+                    <>
+                      <FiCreditCard className="w-5 h-5" />
+                      Secure Checkout
+                    </>
+                  )}
                 </button>
 
                 <p className="text-xs text-gray-500 text-center">

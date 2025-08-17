@@ -120,21 +120,71 @@ export const AddCourse = async (req, res) => {
         });
       }
 
-      // Initialize empty arrays
+      // Initialize empty arrays only if they don't exist in the JSON
       parsedCourseData.courseContent = Array.isArray(
         parsedCourseData.courseContent
       )
         ? parsedCourseData.courseContent
         : [];
-      // Explicitly set courseRatings as an empty array
-      parsedCourseData.courseRatings = [];
-      parsedCourseData.enrolledStudents = [];
+
+      // Only set courseRatings to empty if it doesn't exist
+      if (!Array.isArray(parsedCourseData.courseRatings)) {
+        parsedCourseData.courseRatings = [];
+      }
+
+      // Only set enrolledStudents to empty if it doesn't exist
+      // FIXED: Don't overwrite enrolledStudents if it exists in JSON
+      if (!Array.isArray(parsedCourseData.enrolledStudents)) {
+        parsedCourseData.enrolledStudents = [];
+      }
 
       console.log("Initialized arrays:", {
         courseContent: parsedCourseData.courseContent,
         courseRatings: parsedCourseData.courseRatings,
         enrolledStudents: parsedCourseData.enrolledStudents,
+        isPublished: parsedCourseData.isPublished,
       });
+
+      // Debug log to verify JSON values are preserved
+      console.log("🔍 JSON Values Check:", {
+        "isPublished from JSON": parsedCourseData.isPublished,
+        "enrolledStudents count from JSON":
+          parsedCourseData.enrolledStudents?.length || 0,
+        "courseRatings count from JSON":
+          parsedCourseData.courseRatings?.length || 0,
+      });
+
+      // Validate courseRatings structure if it exists
+      if (
+        parsedCourseData.courseRatings &&
+        Array.isArray(parsedCourseData.courseRatings)
+      ) {
+        for (let i = 0; i < parsedCourseData.courseRatings.length; i++) {
+          const rating = parsedCourseData.courseRatings[i];
+          if (
+            !rating.user ||
+            typeof rating.user !== "string" ||
+            rating.user.trim() === ""
+          ) {
+            return res.status(400).json({
+              success: false,
+              error: `courseRatings[${i}] must have a valid 'user' field as a non-empty string`,
+            });
+          }
+          if (
+            !rating.rating ||
+            typeof rating.rating !== "number" ||
+            rating.rating < 1 ||
+            rating.rating > 5
+          ) {
+            return res.status(400).json({
+              success: false,
+              error: `courseRatings[${i}] must have a valid 'rating' field as a number between 1-5`,
+            });
+          }
+        }
+        console.log("✅ courseRatings validation passed");
+      }
     } catch (parseError) {
       console.error("❌ Error parsing course data:", parseError);
       return res.status(400).json({
@@ -215,10 +265,15 @@ export const AddCourse = async (req, res) => {
       ...parsedCourseData,
       educator: educatorId,
       courseThumbnail: imgUpload.secure_url,
-      isPublished: false,
+      // FIXED: Use isPublished from JSON if provided, otherwise default to false
+      isPublished:
+        parsedCourseData.isPublished !== undefined
+          ? parsedCourseData.isPublished
+          : false,
       courseContent: parsedCourseData.courseContent || [],
-      courseRatings: [], // Explicitly set empty array
-      enrolledStudents: [],
+      // FIXED: Keep the arrays from parsedCourseData instead of overwriting
+      courseRatings: parsedCourseData.courseRatings || [],
+      enrolledStudents: parsedCourseData.enrolledStudents || [],
       createdAt: new Date(),
       updatedAt: new Date(),
     };
@@ -234,6 +289,25 @@ export const AddCourse = async (req, res) => {
       "Creating course with data:",
       JSON.stringify(courseToCreate, null, 2)
     );
+
+    // Additional debug for courseRatings specifically
+    if (
+      courseToCreate.courseRatings &&
+      courseToCreate.courseRatings.length > 0
+    ) {
+      console.log("🔍 Detailed courseRatings structure:");
+      courseToCreate.courseRatings.forEach((rating, index) => {
+        console.log(`Rating ${index}:`, {
+          user: rating.user,
+          userType: typeof rating.user,
+          rating: rating.rating,
+          ratingType: typeof rating.rating,
+          hasUser: !!rating.user,
+          userLength: rating.user?.length,
+        });
+      });
+    }
+
     const newCourse = new Course(courseToCreate);
 
     console.log("📚 Saving course to database...");
@@ -624,5 +698,79 @@ export const getEnrolledStudentsByEducator = async (req, res) => {
   } catch (error) {
     console.error("Error fetching enrolled students:", error);
     res.status(500).json({ success: false, message: "Server error" });
+  }
+};
+
+// Toggle course publication status
+export const toggleCoursePublication = async (req, res) => {
+  try {
+    console.log("🔄 Toggling course publication status...");
+    await connectDB();
+
+    const auth = req.auth();
+    const { userId: educatorId } = auth || {};
+    const { courseId } = req.params;
+
+    if (!educatorId) {
+      return res.status(401).json({
+        success: false,
+        error: "User authentication required",
+      });
+    }
+
+    if (!courseId || !courseId.match(/^[0-9a-fA-F]{24}$/)) {
+      return res.status(400).json({
+        success: false,
+        error: "Valid course ID is required",
+      });
+    }
+
+    // Find the course
+    const Course = (await import("../models/Course.js")).default;
+    const course = await Course.findById(courseId);
+
+    if (!course) {
+      return res.status(404).json({
+        success: false,
+        error: "Course not found",
+      });
+    }
+
+    // Verify the educator owns this course
+    if (course.educator.toString() !== educatorId) {
+      return res.status(403).json({
+        success: false,
+        error: "You are not authorized to modify this course",
+      });
+    }
+
+    // Toggle the publication status
+    const newStatus = !course.isPublished;
+    course.isPublished = newStatus;
+    course.updatedAt = new Date();
+
+    await course.save();
+
+    console.log(
+      `✅ Course ${courseId} publication status changed to: ${newStatus}`
+    );
+
+    return res.status(200).json({
+      success: true,
+      message: `Course ${newStatus ? "published" : "drafted"} successfully`,
+      course: {
+        _id: course._id,
+        courseTitle: course.courseTitle,
+        isPublished: course.isPublished,
+        updatedAt: course.updatedAt,
+      },
+    });
+  } catch (error) {
+    console.error("❌ Error toggling course publication:", error);
+    return res.status(500).json({
+      success: false,
+      error: "Internal server error",
+      message: error.message,
+    });
   }
 };

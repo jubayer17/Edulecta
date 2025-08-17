@@ -9,6 +9,7 @@ import {
   updateEducatorDashboard,
   getEducatorInfo,
   getEnrolledStudentsByEducator, // <-- import the new controller
+  toggleCoursePublication, // <-- import the toggle function
 } from "../controllers/educatorController.js";
 import upload, { handleMulterError } from "./../configs/multer.js";
 import { protectEducator } from "./../middlewares/authMiddleware.js";
@@ -36,6 +37,13 @@ educatorRouter.delete(
   "/delete-course/:courseId",
   protectEducator,
   deleteCourse
+);
+
+// Toggle course publication status
+educatorRouter.patch(
+  "/toggle-publication/:courseId",
+  protectEducator,
+  toggleCoursePublication
 );
 
 // Get dashboard data

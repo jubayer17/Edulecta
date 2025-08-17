@@ -14,6 +14,9 @@ import {
   getUserCourseProgress,
   addCourseRating,
   retryPayment,
+  getPendingPurchasesCount,
+  cleanupOldPurchases,
+  debugUserPurchases,
 } from "../controllers/userController.js";
 import connectDB from "../configs/mongodb.js";
 
@@ -34,6 +37,15 @@ userRouter.post("/retry-payment/:purchaseId", retryPayment);
 
 // Get user enrolled courses (protected route)
 userRouter.get("/enrolled-courses", GetUserEnrolledCourses);
+
+// Get pending purchases count (protected route)
+userRouter.get("/pending-purchases-count", getPendingPurchasesCount);
+
+// Clean up old purchases (protected route)
+userRouter.post("/cleanup-old-purchases", cleanupOldPurchases);
+
+// Debug user purchases (protected route)
+userRouter.get("/debug-purchases", debugUserPurchases);
 
 // Enroll in a course (protected route)
 userRouter.post("/enroll", EnrollInCourse);

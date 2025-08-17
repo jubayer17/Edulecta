@@ -7,6 +7,7 @@ import CoursesList from "./pages/student/CoursesList";
 import CourseDetails from "./pages/student/CourseDetails";
 import TopPicksCoursesPage from "./pages/student/TopPicksCoursesPage";
 import NewlyAddedCoursesPage from "./pages/student/NewlyAddedCoursesPage";
+import SubscriptionPlansPage from "./pages/student/SubscriptionPlansPage";
 import MyEnrollments from "./pages/student/MyEnrollments.jsx";
 import PendingPurchases from "./pages/student/PendingPurchases.jsx";
 import Cart from "./pages/student/Cart.jsx";
@@ -22,6 +23,7 @@ import UpdateCourses from "./pages/educator/UpdateCourses";
 import Navbar from "./components/student/Navbar.jsx";
 import BottomNavigation from "./components/student/BottomNavigation.jsx";
 import CartDrawer from "./components/student/CartDrawer.jsx";
+import FloatingCartButton from "./components/student/FloatingCartButton.jsx";
 import { ToastContainer } from "react-toastify";
 
 import { AppContextProvider } from "./context/AppContextProvider"; // <--- Import provider
@@ -45,6 +47,10 @@ const App = () => {
             path="/newly-added-courses"
             element={<NewlyAddedCoursesPage />}
           />
+          <Route
+            path="/subscription-plans"
+            element={<SubscriptionPlansPage />}
+          />
           <Route path="/my-enrollments" element={<MyEnrollments />} />
           <Route path="/pending-purchases" element={<PendingPurchases />} />
           <Route path="/cart" element={<Cart />} />
@@ -63,6 +69,9 @@ const App = () => {
 
         {/* Bottom Navigation for Mobile */}
         {!isEducatorRoute && <BottomNavigation />}
+
+        {/* Floating Cart Button */}
+        {!isEducatorRoute && <FloatingCartButton />}
 
         {/* Cart Drawer */}
         <CartDrawer />
