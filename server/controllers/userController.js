@@ -35,30 +35,224 @@ export const GetUserData = async (req, res) => {
     // 1️⃣ Try to find existing user
     let user = await User.findById(userId).select("-password");
 
-    // 2️⃣ If not found, create a new user
+    // 2️⃣ If not found, fetch from Clerk and create user
     if (!user) {
-      console.warn("User not found, creating new one:", userId);
+      console.warn(
+        "User not found in database, attempting to fetch from Clerk:",
+        userId
+      );
 
-      // Make sure these values come from `auth` or a request body
-      const newUserData = {
-        _id: userId,
-        username: auth?.username || `user_${Date.now()}`, // fallback username
-        email: auth?.email || `${userId}@example.com`, // fallback email
-        password: auth?.password || "defaultpassword", // 🔹 In production, hash it!
-        imageUrl: auth?.imageUrl || "https://via.placeholder.com/150",
-      };
+      try {
+        // Import Clerk client
+        const { clerkClient } = await import("@clerk/express");
 
-      user = new User(newUserData);
-      await user.save();
+        // Fetch user data from Clerk
+        const clerkUser = await clerkClient.users.getUser(userId);
+        console.log("🔍 Clerk user data:", JSON.stringify(clerkUser, null, 2));
+
+        // Create comprehensive user data from Clerk
+        const newUserData = {
+          _id: userId,
+          username: (() => {
+            // Enhanced username extraction
+            if (
+              clerkUser.username &&
+              clerkUser.username !== "null" &&
+              clerkUser.username.trim() !== ""
+            ) {
+              return clerkUser.username.trim();
+            }
+
+            const firstName =
+              clerkUser.firstName && clerkUser.firstName !== "null"
+                ? clerkUser.firstName.trim()
+                : "";
+            const lastName =
+              clerkUser.lastName && clerkUser.lastName !== "null"
+                ? clerkUser.lastName.trim()
+                : "";
+            const fullName = `${firstName} ${lastName}`.trim();
+
+            if (fullName && fullName !== "") {
+              return fullName;
+            }
+
+            // Try external accounts for Google/OAuth data
+            if (
+              clerkUser.externalAccounts &&
+              Array.isArray(clerkUser.externalAccounts)
+            ) {
+              for (const account of clerkUser.externalAccounts) {
+                if (account.provider === "oauth_google") {
+                  const googleFirstName = account.firstName || "";
+                  const googleLastName = account.lastName || "";
+                  const googleFullName =
+                    `${googleFirstName} ${googleLastName}`.trim();
+                  if (googleFullName) return googleFullName;
+
+                  // Try email username from Google account
+                  if (account.emailAddress) {
+                    const emailUsername = account.emailAddress.split("@")[0];
+                    const cleanUsername = emailUsername
+                      .replace(/[^a-zA-Z]/g, " ")
+                      .trim();
+                    if (cleanUsername && cleanUsername.length > 2) {
+                      return (
+                        cleanUsername.charAt(0).toUpperCase() +
+                        cleanUsername.slice(1)
+                      );
+                    }
+                    return emailUsername;
+                  }
+                }
+              }
+            }
+
+            // Try primary email address
+            const primaryEmail =
+              clerkUser.emailAddresses?.find(
+                (e) => e.id === clerkUser.primaryEmailAddressId
+              )?.emailAddress ||
+              clerkUser.emailAddresses?.[0]?.emailAddress ||
+              "";
+
+            if (primaryEmail) {
+              const emailUsername = primaryEmail.split("@")[0];
+              const cleanUsername = emailUsername
+                .replace(/[^a-zA-Z]/g, " ")
+                .trim();
+              if (cleanUsername && cleanUsername.length > 2) {
+                return (
+                  cleanUsername.charAt(0).toUpperCase() + cleanUsername.slice(1)
+                );
+              }
+              return emailUsername;
+            }
+
+            return `User ${userId.slice(-6)}`;
+          })(),
+
+          email: (() => {
+            // Get primary email
+            const primaryEmail = clerkUser.emailAddresses?.find(
+              (e) => e.id === clerkUser.primaryEmailAddressId
+            )?.emailAddress;
+            if (primaryEmail) return primaryEmail;
+
+            // Fallback to first email
+            const firstEmail = clerkUser.emailAddresses?.[0]?.emailAddress;
+            if (firstEmail) return firstEmail;
+
+            // Try external accounts
+            if (
+              clerkUser.externalAccounts &&
+              Array.isArray(clerkUser.externalAccounts)
+            ) {
+              for (const account of clerkUser.externalAccounts) {
+                if (
+                  account.provider === "oauth_google" &&
+                  account.emailAddress
+                ) {
+                  return account.emailAddress;
+                }
+              }
+            }
+
+            return `${userId}@edulecta.local`;
+          })(),
+
+          password: "clerk_managed",
+
+          imageUrl: (() => {
+            if (clerkUser.imageUrl && clerkUser.imageUrl !== "")
+              return clerkUser.imageUrl;
+            if (clerkUser.profileImageUrl && clerkUser.profileImageUrl !== "")
+              return clerkUser.profileImageUrl;
+
+            // Check external accounts for profile image
+            if (
+              clerkUser.externalAccounts &&
+              Array.isArray(clerkUser.externalAccounts)
+            ) {
+              for (const account of clerkUser.externalAccounts) {
+                if (account.provider === "oauth_google" && account.picture) {
+                  return account.picture;
+                }
+              }
+            }
+
+            return "https://via.placeholder.com/150?text=User";
+          })(),
+
+          enrolledCourses: [],
+          isEducator: clerkUser.publicMetadata?.role === "educator" || false,
+          createdAt: clerkUser.createdAt
+            ? new Date(clerkUser.createdAt)
+            : new Date(),
+          timestamp: new Date(),
+        };
+
+        console.log(
+          "📝 Creating user from Clerk data:",
+          JSON.stringify(newUserData, null, 2)
+        );
+        user = new User(newUserData);
+        await user.save();
+        console.log("✅ User created from Clerk data:", user._id);
+        console.log("📧 Email:", user.email);
+        console.log("👤 Username:", user.username);
+      } catch (clerkError) {
+        console.error("❌ Failed to fetch from Clerk:", clerkError.message);
+
+        // Create minimal fallback user
+        const fallbackUserData = {
+          _id: userId,
+          username: `User ${userId.slice(-6)}`,
+          email: `${userId}@edulecta.local`,
+          password: "clerk_managed",
+          imageUrl: "https://via.placeholder.com/150?text=User",
+          enrolledCourses: [],
+          isEducator: false,
+          createdAt: new Date(),
+          timestamp: new Date(),
+        };
+
+        console.log(
+          "📝 Creating fallback user:",
+          JSON.stringify(fallbackUserData, null, 2)
+        );
+        user = new User(fallbackUserData);
+        await user.save();
+        console.log("✅ Fallback user created:", user._id);
+      }
+    } else {
+      console.log(
+        "✅ Found existing user:",
+        user._id,
+        user.username,
+        user.email
+      );
     }
 
     return res.status(200).json({
       success: true,
       message: "User data fetched successfully",
-      user,
+      user: {
+        _id: user._id,
+        username: user.username,
+        email: user.email,
+        imageUrl: user.imageUrl,
+        enrolledCourses: user.enrolledCourses,
+        isEducator: user.isEducator,
+        createdAt: user.createdAt,
+      },
     });
   } catch (error) {
-    console.error("❌ Error fetching/creating user:", error.message);
+    console.error("❌ Error fetching/creating user:", {
+      message: error.message,
+      stack: error.stack,
+      name: error.name,
+    });
     return res.status(500).json({
       success: false,
       error: "Internal server error",
@@ -1274,10 +1468,10 @@ export const getPendingPurchasesCount = async (req, res) => {
       {
         userId,
         status: { $in: ["pending", "incomplete"] },
-        createdAt: { $lt: oneDayAgo }
+        createdAt: { $lt: oneDayAgo },
       },
       {
-        $set: { status: "expired" }
+        $set: { status: "expired" },
       }
     );
 
@@ -1285,7 +1479,7 @@ export const getPendingPurchasesCount = async (req, res) => {
     const pendingCount = await Purchase.countDocuments({
       userId,
       status: { $in: ["pending", "incomplete"] },
-      createdAt: { $gte: oneDayAgo }
+      createdAt: { $gte: oneDayAgo },
     });
 
     // TEMPORARY FIX: Force count to be 1 if there are any pending purchases
@@ -1405,7 +1599,7 @@ export const debugUserPurchases = async (req, res) => {
     // Get all purchases for this user
     const allPurchases = await Purchase.find({ userId })
       .select("status courseId createdAt stripeSessionId amount")
-      .populate('courseId', 'courseTitle')
+      .populate("courseId", "courseTitle")
       .sort({ createdAt: -1 })
       .lean();
 
@@ -1417,9 +1611,10 @@ export const debugUserPurchases = async (req, res) => {
     const oneDayAgo = new Date();
     oneDayAgo.setHours(oneDayAgo.getHours() - 24);
 
-    const recentPending = allPurchases.filter(p => 
-      ["pending", "incomplete"].includes(p.status) && 
-      new Date(p.createdAt) >= oneDayAgo
+    const recentPending = allPurchases.filter(
+      (p) =>
+        ["pending", "incomplete"].includes(p.status) &&
+        new Date(p.createdAt) >= oneDayAgo
     );
 
     return res.status(200).json({
@@ -1428,12 +1623,15 @@ export const debugUserPurchases = async (req, res) => {
         totalPurchases: allPurchases.length,
         purchasesByStatus,
         recentPendingCount: recentPending.length,
-        allPurchases: allPurchases.map(p => ({
+        allPurchases: allPurchases.map((p) => ({
           ...p,
-          courseTitle: p.courseId?.courseTitle || 'Unknown Course',
-          age: Math.round((Date.now() - new Date(p.createdAt).getTime()) / (1000 * 60 * 60)) + ' hours'
-        }))
-      }
+          courseTitle: p.courseId?.courseTitle || "Unknown Course",
+          age:
+            Math.round(
+              (Date.now() - new Date(p.createdAt).getTime()) / (1000 * 60 * 60)
+            ) + " hours",
+        })),
+      },
     });
   } catch (error) {
     console.error("❌ Error debugging user purchases:", error.message);

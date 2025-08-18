@@ -5,6 +5,7 @@ import { AppContext } from "../../context/AppContext";
 const StudentsEnrolled = () => {
   const { enrolledStudentInfo, user } = useContext(AppContext);
   const [enrolledStudents, setEnrolledStudents] = useState([]);
+  console.log("Enrolled Students:", enrolledStudents);
 
   // Map backend data to include a `student` object for UI consistency
   useEffect(() => {

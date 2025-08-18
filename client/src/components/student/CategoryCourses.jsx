@@ -1,0 +1,178 @@
+import React, { useState, useEffect, useContext } from "react";
+import { AppContext } from "../../context/AppContext";
+import { assets } from "../../assets/assets";
+
+const CategoryCourses = ({ selectedCategory }) => {
+  const { backendUrl } = useContext(AppContext);
+  const [courses, setCourses] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  // Fetch courses based on selected category
+  useEffect(() => {
+    const fetchCourses = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        
+        let url = `${backendUrl}/api/course/all`;
+        if (selectedCategory) {
+          url += `?category=${encodeURIComponent(selectedCategory)}`;
+        }
+        
+        const response = await fetch(url);
+        const data = await response.json();
+        
+        if (data.success && data.courses) {
+          // Sort courses by enrollment count (most enrolled first)
+          const sortedCourses = data.courses.sort((a, b) => {
+            const aEnrollments = a.enrollments?.length || a.enrolledStudents?.length || 0;
+            const bEnrollments = b.enrollments?.length || b.enrolledStudents?.length || 0;
+            return bEnrollments - aEnrollments;
+          });
+          setCourses(sortedCourses);
+        } else {
+          setError("Failed to fetch courses");
+        }
+      } catch (error) {
+        console.error("Error fetching courses:", error);
+        setError("Failed to load courses");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchCourses();
+  }, [selectedCategory, backendUrl]);
+
+  if (loading) {
+    return (
+      <div className="max-w-7xl mx-auto px-4 py-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+          {[...Array(8)].map((_, index) => (
+            <div key={index} className="bg-white rounded-lg shadow-md overflow-hidden animate-pulse">
+              <div className="h-48 bg-gray-200"></div>
+              <div className="p-4">
+                <div className="h-4 bg-gray-200 rounded mb-2"></div>
+                <div className="h-3 bg-gray-200 rounded mb-2"></div>
+                <div className="h-3 bg-gray-200 rounded w-2/3"></div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="max-w-7xl mx-auto px-4 py-8">
+        <div className="text-center">
+          <div className="text-red-600 text-lg font-medium">{error}</div>
+          <p className="text-gray-500 mt-2">Please try again later</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (courses.length === 0) {
+    return (
+      <div className="max-w-7xl mx-auto px-4 py-8">
+        <div className="text-center">
+          <img 
+            src={assets.search_icon} 
+            alt="No courses" 
+            className="w-16 h-16 mx-auto mb-4 opacity-50"
+          />
+          <h3 className="text-lg font-medium text-gray-900 mb-2">
+            No courses found
+          </h3>
+          <p className="text-gray-500">
+            {selectedCategory 
+              ? `No courses available in "${selectedCategory}" category`
+              : "No courses available at the moment"
+            }
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="max-w-7xl mx-auto px-4 py-8">
+      {/* Header */}
+      <div className="mb-8">
+        <h2 className="text-2xl font-bold text-gray-900 mb-2">
+          {selectedCategory ? `${selectedCategory} Courses` : "All Courses"}
+        </h2>
+        <p className="text-gray-600">
+          {courses.length} {courses.length === 1 ? 'course' : 'courses'} found
+          {selectedCategory && ` in ${selectedCategory}`}
+        </p>
+      </div>
+
+      {/* Courses Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+        {courses.map((course) => (
+          <div
+            key={course._id}
+            className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow duration-200 cursor-pointer"
+          >
+            {/* Course Image */}
+            <div className="relative h-48 overflow-hidden">
+              <img
+                src={course.image || course.courseThumbnail || assets.course_1}
+                alt={course.title || course.courseTitle}
+                className="w-full h-full object-cover"
+              />
+              {(course.category || course.courseCategory) && (
+                <div className="absolute top-2 left-2">
+                  <span className="bg-blue-500 text-white text-xs px-2 py-1 rounded-full">
+                    {course.category || course.courseCategory}
+                  </span>
+                </div>
+              )}
+            </div>
+
+            {/* Course Content */}
+            <div className="p-4">
+              <h3 className="font-semibold text-gray-900 mb-2 line-clamp-2">
+                {course.title || course.courseTitle}
+              </h3>
+              
+              <p className="text-gray-600 text-sm mb-3 line-clamp-2">
+                {course.description || course.courseDescription}
+              </p>
+
+              {/* Course Stats */}
+              <div className="flex items-center justify-between text-sm text-gray-500 mb-3">
+                <div className="flex items-center gap-1">
+                  <img src={assets.user_icon} alt="Students" className="w-4 h-4" />
+                  <span>{(course.enrollments?.length || course.enrolledStudents?.length || 0)} students</span>
+                </div>
+                
+                <div className="flex items-center gap-1">
+                  <img src={assets.lesson_icon} alt="Lessons" className="w-4 h-4" />
+                  <span>{(course.lessons?.length || course.courseContent?.length || 0)} lessons</span>
+                </div>
+              </div>
+
+              {/* Price and Enrollment */}
+              <div className="flex items-center justify-between">
+                <div className="text-lg font-bold text-blue-600">
+                  ${course.price || course.coursePrice || 0}
+                </div>
+                
+                <button className="bg-gradient-to-r from-blue-500 to-purple-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:from-blue-600 hover:to-purple-700 transition-colors">
+                  View Course
+                </button>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+export default CategoryCourses;

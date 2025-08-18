@@ -101,29 +101,75 @@ export const AppContextProvider = ({ children }) => {
     }
   };
 
-  // Fetch user profile
+  // Fetch user profile with enhanced error handling and data validation
   const fetchUserData = useCallback(async () => {
     try {
       const token = await getToken();
-      if (!token) return;
+      if (!token) {
+        console.log("No token available, skipping user data fetch");
+        return;
+      }
 
+      console.log("🔍 Fetching user data...");
       const { data } = await axios.get(`${backendUrl}/api/user/profile`, {
         headers: { Authorization: `Bearer ${token}` },
       });
 
-      if (data.success) {
-        setUsers(data.user);
+      if (data.success && data.user) {
+        console.log("✅ User data fetched successfully:", {
+          id: data.user._id,
+          username: data.user.username,
+          email: data.user.email,
+          isEducator: data.user.isEducator,
+        });
+
         setUserData(data.user);
         setEnrolledCourses(data.user.enrolledCourses || []);
-        if (user?.publicMetadata?.role === "educator") setIsEducator(true);
+
+        // Set educator status from both user data and Clerk metadata
+        const isEducatorFromData = data.user.isEducator || false;
+        const isEducatorFromClerk =
+          user?.publicMetadata?.role === "educator" || false;
+        const shouldBeEducator = isEducatorFromData || isEducatorFromClerk;
+
+        console.log("🔍 Educator status check:", {
+          fromUserData: isEducatorFromData,
+          fromClerk: isEducatorFromClerk,
+          currentIsEducator: isEducator,
+          shouldBeEducator,
+        });
+
+        if (shouldBeEducator !== isEducator) {
+          console.log(
+            `🔄 Updating educator status from ${isEducator} to ${shouldBeEducator}`
+          );
+          setIsEducator(shouldBeEducator);
+        }
       } else {
+        console.warn(
+          "⚠️ User data fetch failed or returned invalid data:",
+          data
+        );
         setEnrolledCourses([]);
+        setUserData(null);
       }
     } catch (error) {
-      console.error("Error fetching user data:", error);
+      console.error("❌ Error fetching user data:", {
+        message: error.message,
+        response: error.response?.data,
+        status: error.response?.status,
+      });
       setEnrolledCourses([]);
+      setUserData(null);
+
+      // Don't show toast for authentication errors to avoid spam
+      if (error.response?.status !== 401 && error.response?.status !== 403) {
+        toast.error(
+          "Failed to fetch user data. Please try refreshing the page."
+        );
+      }
     }
-  }, [backendUrl, getToken, user?.publicMetadata?.role]);
+  }, [backendUrl, getToken, user?.publicMetadata?.role, isEducator]);
   console.log(userData);
 
   // Memoized full enrolled courses
@@ -135,31 +181,80 @@ export const AppContextProvider = ({ children }) => {
     return allCourses.filter((course) => enrolledIds.includes(course._id));
   }, [enrolledCourses, allCourses]);
 
-  //get educator info
+  //get educator info with enhanced validation
   const fetchEducatorDashboard = useCallback(async () => {
     try {
       const token = await getToken();
-      console.log(token);
-      if (!token) return;
+      if (!token) {
+        console.log("No token available, skipping educator dashboard fetch");
+        return;
+      }
 
+      // Only fetch if user is an educator
+      if (!isEducator && user?.publicMetadata?.role !== "educator") {
+        console.log("User is not an educator, skipping dashboard fetch");
+        return;
+      }
+
+      console.log("🔍 Fetching educator dashboard...");
       const { data } = await axios.get(`${backendUrl}/api/educator/me`, {
         headers: { Authorization: `Bearer ${token}` },
       });
 
-      if (data.success) {
+      if (data.success && data.data) {
+        console.log("✅ Educator dashboard fetched successfully:", {
+          totalCourses: data.data.totalCourses,
+          totalEnrollments: data.data.totalEnrollments,
+          totalEarnings: data.data.totalEarnings,
+        });
+
         setEducatorDashboard(data.data);
-        // Removed toast message to prevent spam
-        console.log("Educator dashboard fetched successfully");
+
+        // Ensure educator status is set if we successfully fetched educator data
+        if (!isEducator) {
+          console.log(
+            "🔄 Setting educator status to true based on successful dashboard fetch"
+          );
+          setIsEducator(true);
+        }
+      } else {
+        console.warn("⚠️ Educator dashboard fetch failed:", data);
+        // Don't reset educator status here - user might be a new educator with no courses yet
       }
     } catch (error) {
-      console.error("Error fetching educator dashboard:", error);
+      console.error("❌ Error fetching educator dashboard:", {
+        message: error.message,
+        response: error.response?.data,
+        status: error.response?.status,
+      });
+
+      // Only show error for non-auth related errors
+      if (error.response?.status === 404) {
+        console.log(
+          "📝 Educator record not found - user might need to create educator profile"
+        );
+      } else if (
+        error.response?.status !== 401 &&
+        error.response?.status !== 403
+      ) {
+        toast.error("Failed to fetch educator dashboard");
+      }
     }
-  }, [backendUrl, getToken]);
+  }, [backendUrl, getToken, isEducator, user?.publicMetadata?.role]);
   console.log("Educator Dashboard:", educatorDashboard);
 
   // Educator dashboard calculation & sync function
   const syncEducatorDashboard = useCallback(async () => {
     if (!isEducator) return;
+
+    // Check if educator has any courses before trying to sync
+    if (
+      !educatorDashboard.publishedCourses ||
+      educatorDashboard.publishedCourses.length === 0
+    ) {
+      console.log("No courses found, skipping dashboard sync");
+      return;
+    }
 
     try {
       const token = await getToken();
@@ -184,7 +279,7 @@ export const AppContextProvider = ({ children }) => {
       console.error("Error syncing dashboard:", error);
       toast.error(error.response?.data?.message || "Dashboard sync failed");
     }
-  }, [backendUrl, getToken, isEducator]);
+  }, [backendUrl, getToken, isEducator, educatorDashboard.publishedCourses]);
   console.log("Sync Educator Data:", syncEducatorData);
 
   // Toggle course publication status
@@ -573,6 +668,14 @@ export const AppContextProvider = ({ children }) => {
   useEffect(() => {
     if (!user) {
       hasInitialized.current = false; // Reset when user logs out
+      setIsEducator(false); // Reset educator status
+      setUserData(null);
+      setEducatorDashboard({
+        totalEarnings: 0,
+        enrolledStudents: 0,
+        numberOfCourses: 0,
+        publishedCourses: [],
+      });
       return;
     }
 
@@ -580,12 +683,28 @@ export const AppContextProvider = ({ children }) => {
 
     const init = async () => {
       hasInitialized.current = true;
+      console.log("🚀 Initializing user data for:", user.id);
+
+      // Check Clerk metadata first
+      const isEducatorFromClerk = user?.publicMetadata?.role === "educator";
+      if (isEducatorFromClerk && !isEducator) {
+        console.log("🏫 Setting educator status from Clerk metadata");
+        setIsEducator(true);
+      }
+
+      // Fetch user data and other information
       await fetchUserData();
       await fetchEducatorDashboard();
       await fetchPendingPurchases(); // Use the full fetch instead of just count
 
-      if (user?.publicMetadata?.role === "educator") {
-        await syncEducatorDashboard();
+      // Sync educator dashboard if user is an educator
+      if (isEducatorFromClerk || isEducator) {
+        console.log("🔄 Syncing educator dashboard...");
+        try {
+          await syncEducatorDashboard();
+        } catch (error) {
+          console.warn("⚠️ Failed to sync educator dashboard:", error);
+        }
       }
     };
     init();
@@ -595,13 +714,22 @@ export const AppContextProvider = ({ children }) => {
     fetchEducatorDashboard,
     syncEducatorDashboard,
     fetchPendingPurchases,
+    isEducator, // Add isEducator to dependencies
   ]);
 
   useEffect(() => {
-    if (isEducator && hasInitialized.current) {
+    if (
+      isEducator &&
+      hasInitialized.current &&
+      educatorDashboard.publishedCourses.length > 0
+    ) {
       enrolledStudentsInfo();
     }
-  }, [isEducator, enrolledStudentsInfo]);
+  }, [
+    isEducator,
+    enrolledStudentsInfo,
+    educatorDashboard.publishedCourses.length,
+  ]);
 
   // Cart functions
   const addToCart = (course) => {
@@ -694,6 +822,7 @@ export const AppContextProvider = ({ children }) => {
     syncEducatorDashboard, // <--- call this anywhere to push totals to DB
     toggleCoursePublication, // <--- toggle course publication status
     educatorDashboard,
+    fetchEducatorDashboard, // Add this for components that need to refresh educator data
     // Cart functionality
     cartItems,
     addToCart,

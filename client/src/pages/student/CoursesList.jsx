@@ -1,5 +1,5 @@
 import React, { useContext, useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useLocation } from "react-router-dom";
 import { FaBookOpen } from "react-icons/fa";
 import { AppContext } from "../../context/AppContext";
 import SearchBar from "../../components/student/SearchBar";
@@ -11,16 +11,21 @@ const CoursesList = () => {
   const { navigate, allCourses, fetchAllCourses, isEducator } =
     useContext(AppContext);
   const { input } = useParams();
+  const location = useLocation();
   const [sortOption, setSortOption] = useState("popular");
   const [filteredCourse, setFilteredCourse] = useState([]);
 
-  console.log("Current user is educator:", isEducator);
+  // Get category from URL parameters
+  const searchParams = new URLSearchParams(location.search);
+  const categoryFilter = searchParams.get('category');
 
-  // Fetch courses when component mounts
+  console.log("Current user is educator:", isEducator);
+  console.log("Category filter from URL:", categoryFilter);
+
   useEffect(() => {
     console.log("CoursesList mounted, fetching fresh data...");
     fetchAllCourses();
-  }, []);
+  }, [fetchAllCourses]);
 
   useEffect(() => {
     console.log("\n📊 Course List Update:");
@@ -74,6 +79,14 @@ const CoursesList = () => {
       console.log("After search filter:", tempCourses.length, "courses");
     }
 
+    // Apply category filter if present
+    if (categoryFilter) {
+      tempCourses = tempCourses.filter((course) =>
+        course.courseCategory && course.courseCategory.toLowerCase() === categoryFilter.toLowerCase()
+      );
+      console.log("After category filter:", tempCourses.length, "courses for category:", categoryFilter);
+    }
+
     // Apply sorting
     switch (sortOption) {
       case "newest":
@@ -99,7 +112,7 @@ const CoursesList = () => {
     }
 
     setFilteredCourse(tempCourses);
-  }, [allCourses, input, sortOption]);
+  }, [allCourses, input, sortOption, categoryFilter, isEducator]);
 
   return (
     <div className="pb-20 md:pb-0">
@@ -151,6 +164,22 @@ const CoursesList = () => {
               <span className="text-xs md:text-sm">Showing results for:</span>
               <strong className="text-indigo-600 text-sm md:text-base">
                 {input}
+              </strong>
+              <img
+                src={assets.cross_icon}
+                alt="Clear"
+                className="w-5 h-5 md:w-4 md:h-4 cursor-pointer hover:opacity-70 active:scale-95 transition-all duration-200 ml-auto"
+                onClick={() => navigate("/course-list")}
+              />
+            </div>
+          )}
+
+          {/* Active Category Filter Indicator */}
+          {categoryFilter && (
+            <div className="inline-flex items-center gap-3 md:gap-4 py-3 md:py-2 px-4 border rounded-lg text-sm bg-blue-50 shadow-sm mb-6 md:mb-8 text-gray-600 w-full md:w-auto">
+              <span className="text-xs md:text-sm">Category:</span>
+              <strong className="text-blue-600 text-sm md:text-base">
+                {categoryFilter}
               </strong>
               <img
                 src={assets.cross_icon}

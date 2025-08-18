@@ -10,6 +10,7 @@ import {
   FiSettings,
   FiChevronRight,
   FiX,
+  FiGrid,
 } from "react-icons/fi";
 
 const Sidebar = ({ isOpen = true, toggleSidebar, isMobile = false }) => {
@@ -39,6 +40,12 @@ const Sidebar = ({ isOpen = true, toggleSidebar, isMobile = false }) => {
       path: "/educator/update-courses",
       icon: FiSettings,
       description: "Edit Existing Courses",
+    },
+    {
+      name: "Categories",
+      path: "/educator/categories",
+      icon: FiGrid,
+      description: "Manage Categories",
     },
     {
       name: "Students Enrolled",

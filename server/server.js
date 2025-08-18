@@ -11,6 +11,7 @@ import courseRouter from "./routes/courseRoute.js";
 import userRouter from "./routes/userRoute.js";
 import { clerkMiddleware } from "@clerk/express";
 import connectCloudinary from "./configs/cloudinary.js";
+import categoryRouter from "./routes/categoryRoutes.js";
 
 // __dirname setup
 const __filename = fileURLToPath(import.meta.url);
@@ -113,6 +114,7 @@ app.get("/clerk", (req, res) => {
 app.use("/api/educator", educatorRouter);
 app.use("/api/course", courseRouter);
 app.use("/api/user", userRouter);
+app.use("/api/category", categoryRouter);
 
 // Test auth
 app.get("/test-auth", (req, res) => {

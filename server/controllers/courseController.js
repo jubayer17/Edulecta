@@ -9,8 +9,19 @@ export const getAllCourse = async (req, res) => {
   try {
     await connectDB();
 
-    // Get all courses without filtering
-    const courses = await Course.find()
+    // Get category filter from query params
+    const { category } = req.query;
+
+    // Build query object
+    let queryObject = { isPublished: true };
+    
+    // Add category filter if provided
+    if (category && category.trim() !== '') {
+      queryObject.courseCategory = { $regex: new RegExp(category.trim(), 'i') };
+    }
+
+    // Get filtered courses
+    const courses = await Course.find(queryObject)
       .select(
         "courseTitle courseDescription courseThumbnail coursePrice courseOfferPrice courseCategory isPublished discount courseContent courseRatings educator enrolledStudents createdAt updatedAt"
       )
@@ -26,6 +37,7 @@ export const getAllCourse = async (req, res) => {
       courses.map((c) => ({
         id: c._id,
         title: c.courseTitle,
+        category: c.courseCategory,
         isPublished: c.isPublished,
       }))
     );
@@ -33,15 +45,48 @@ export const getAllCourse = async (req, res) => {
     if (!courses || courses.length === 0) {
       return res.status(404).json({
         success: false,
-        message: "No published courses found",
+        message: category 
+          ? `No published courses found in "${category}" category`
+          : "No published courses found",
       });
     }
 
+    // Map courses to frontend expected format (keeping original field names for compatibility)
+    const mappedCourses = courses.map(course => ({
+      _id: course._id,
+      courseTitle: course.courseTitle,
+      courseDescription: course.courseDescription,
+      courseThumbnail: course.courseThumbnail,
+      coursePrice: course.coursePrice,
+      courseOfferPrice: course.courseOfferPrice,
+      courseCategory: course.courseCategory,
+      isPublished: course.isPublished,
+      discount: course.discount,
+      courseContent: course.courseContent || [],
+      courseRatings: course.courseRatings || [],
+      educator: course.educator,
+      enrolledStudents: course.enrolledStudents || [],
+      createdAt: course.createdAt,
+      updatedAt: course.updatedAt,
+      // Also include mapped versions for CategoryCourses component
+      title: course.courseTitle,
+      description: course.courseDescription,
+      image: course.courseThumbnail,
+      price: course.coursePrice,
+      offerPrice: course.courseOfferPrice,
+      category: course.courseCategory,
+      lessons: course.courseContent || [],
+      ratings: course.courseRatings || [],
+      enrollments: course.enrolledStudents || []
+    }));
+
     return res.status(200).json({
       success: true,
-      courses,
-      totalCourses: courses.length,
-      message: "Courses fetched successfully",
+      courses: mappedCourses,
+      totalCourses: mappedCourses.length,
+      message: category 
+        ? `Courses in "${category}" category fetched successfully`
+        : "Courses fetched successfully",
     });
   } catch (error) {
     console.error("❌ Error fetching courses:", error.message);

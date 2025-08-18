@@ -1,4 +1,10 @@
-import React, { useState, useEffect, useRef, useContext } from "react";
+import React, {
+  useState,
+  useEffect,
+  useRef,
+  useContext,
+  useCallback,
+} from "react";
 import { assets, dummyCourses } from "../../assets/assets";
 import Quill from "quill";
 import Loading from "../../components/student/Loading";
@@ -11,22 +17,99 @@ const UpdateCourses = () => {
     syncEducatorDashboard,
     backendUrl,
     token,
-    allCourses,
     updateCourse,
     user,
+    getToken,
   } = useContext(AppContext);
   const educatorId = educatorDashboard.educatorId;
   console.log("Educator ID:", educatorId);
   console.log(educatorDashboard);
-  const anotherArray = JSON.parse(JSON.stringify(allCourses));
-  console.log("All Courses:", anotherArray);
+
   const [courses, setCourses] = useState(null);
+  const [enrolledStudents, setEnrolledStudents] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCourse, setSelectedCourse] = useState(null);
   const [courseData, setCourseData] = useState(null);
   const [thumbnailPreview, setThumbnailPreview] = useState(null);
+  const [loading, setLoading] = useState(true);
   const quillRef = useRef(null);
   const editorRef = useRef(null);
+
+  console.log("Educator Courses:", courses);
+  console.log("Enrolled Students:", enrolledStudents);
+  console.log("Published Courses Raw:", educatorDashboard.publishedCourses);
+
+  // Function to fetch complete educator courses
+  const fetchEducatorCourses = useCallback(async () => {
+    if (!isEducator) {
+      setLoading(false);
+      return;
+    }
+
+    try {
+      const token = await getToken();
+      if (!token) {
+        setLoading(false);
+        return;
+      }
+
+      const response = await fetch(`${backendUrl}/api/educator/get-courses`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success && data.courses) {
+          setCourses(data.courses);
+        }
+      }
+    } catch (error) {
+      console.error("Error fetching educator courses:", error);
+    } finally {
+      setLoading(false);
+    }
+  }, [isEducator, backendUrl, getToken]);
+
+  // Function to extract and organize enrolled students from published courses
+  const extractEnrolledStudents = useCallback(() => {
+    if (
+      !educatorDashboard.publishedCourses ||
+      educatorDashboard.publishedCourses.length === 0
+    ) {
+      setEnrolledStudents([]);
+      return;
+    }
+
+    const allStudents = [];
+
+    // Extract from educatorDashboard.publishedCourses structure
+    educatorDashboard.publishedCourses.forEach((course) => {
+      if (course.enrolledStudents && course.enrolledStudents.length > 0) {
+        course.enrolledStudents.forEach((enrollment) => {
+          allStudents.push({
+            studentId: enrollment.studentId,
+            enrolledAt: enrollment.enrolledAt,
+            courseId: course.courseId,
+            courseTitle: course.title,
+            courseThumbnail: course.thumbnail,
+            coursePrice: course.price,
+            isPublished: course.isPublished,
+          });
+        });
+      }
+    });
+
+    // Sort by enrollment date (most recent first)
+    const sortedStudents = allStudents.sort(
+      (a, b) => new Date(b.enrolledAt) - new Date(a.enrolledAt)
+    );
+
+    setEnrolledStudents(sortedStudents);
+    console.log("Extracted enrolled students from schema:", sortedStudents);
+    console.log("Total enrolled students:", sortedStudents.length);
+  }, [educatorDashboard.publishedCourses]);
 
   // Setting up the rich text editor for course descriptions
   useEffect(() => {
@@ -64,11 +147,15 @@ const UpdateCourses = () => {
     }
   }, [courseData]);
 
+  // Fetch educator courses on component mount
   useEffect(() => {
-    if (allCourses) {
-      setCourses([...allCourses]); // or JSON.parse(JSON.stringify(allCourses))
-    }
-  }, [allCourses]);
+    fetchEducatorCourses();
+  }, [fetchEducatorCourses]);
+
+  // Extract enrolled students when published courses data changes
+  useEffect(() => {
+    extractEnrolledStudents();
+  }, [extractEnrolledStudents]);
 
   console.log("Courses:", courses);
 
@@ -345,14 +432,16 @@ const UpdateCourses = () => {
   const filteredCourses = courses
     ? courses.filter(
         (course) =>
-          course.courseTitle.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          course.courseTitle
+            ?.toLowerCase()
+            .includes(searchTerm.toLowerCase()) ||
           course.courseDescription
-            .toLowerCase()
+            ?.toLowerCase()
             .includes(searchTerm.toLowerCase())
       )
     : [];
 
-  if (!courses) {
+  if (!courses && loading) {
     return <Loading />;
   }
 
@@ -386,7 +475,7 @@ const UpdateCourses = () => {
                   Select Course to Update
                 </h2>
                 <div className="text-sm opacity-90">
-                  {filteredCourses.length} of {courses.length} courses
+                  {filteredCourses.length} of {courses?.length || 0} courses
                 </div>
               </div>
             </div>
@@ -435,12 +524,12 @@ const UpdateCourses = () => {
                     />
                   </div>
                   <p className="text-gray-500 text-lg font-medium mb-2">
-                    {searchTerm ? "No courses found" : "No courses available"}
+                    {searchTerm ? "No courses found" : "No published courses"}
                   </p>
                   <p className="text-gray-400 text-sm">
                     {searchTerm
                       ? `Try searching for different keywords`
-                      : "Create your first course to see it here"}
+                      : "You haven't published any courses yet. Create and publish your first course to see it here."}
                   </p>
                   {searchTerm && (
                     <button

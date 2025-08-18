@@ -1,0 +1,31 @@
+{
+  "name": "edulecta",
+  "version": "1.0.0",
+  "description": "Edulecta - Online Learning Platform",
+  "main": "index.js",
+  "scripts": {
+    "dev": "concurrently \"npm run server\" \"npm run client\"",
+    "server": "cd server && npm run dev",
+    "client": "cd client && npm run dev",
+    "build": "cd client && npm run build",
+    "start": "cd server && npm start",
+    "install-all": "npm install && cd client && npm install && cd ../server && npm install"
+  },
+  "keywords": [
+    "education",
+    "learning",
+    "online-courses",
+    "react",
+    "node.js",
+    "mongodb"
+  ],
+  "author": "Edulecta Team",
+  "license": "MIT",
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  },
+  "workspaces": [
+    "client",
+    "server"
+  ]
+}

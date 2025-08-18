@@ -12,7 +12,7 @@ import Footer from "../../components/student/Footer";
 
 const Home = () => {
   return (
-    <div className="min-h-screen w-full relative overflow-hidden flex flex-col pt-16 md:pt-20 pb-20 md:pb-0">
+    <div className="min-h-screen w-full relative overflow-hidden flex flex-col pb-20 md:pb-0">
       {/* Unified Background Elements for All Components */}
       <div className="fixed inset-0 bg-gradient-to-br from-indigo-50/40 via-purple-50/30 to-pink-50/40 -z-10"></div>
       <div className="fixed top-20 left-10 w-40 h-40 bg-blue-200/20 rounded-full blur-3xl animate-pulse -z-10"></div>

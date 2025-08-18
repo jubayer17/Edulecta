@@ -1,5 +1,5 @@
-import React, { useContext, useState, useEffect } from "react";
-import { assets, dummyEducatorData } from "../../assets/assets";
+import React, { useState, useEffect } from "react";
+import { assets } from "../../assets/assets";
 import { UserButton, useUser, useClerk } from "@clerk/clerk-react";
 import { Link, useLocation } from "react-router-dom";
 import {
@@ -12,13 +12,10 @@ import {
   FiUsers,
   FiEdit3,
 } from "react-icons/fi";
-import { AppContext } from "../../context/AppContext";
 
 const Navbar = ({ toggleSidebar, sidebarOpen, isMobile = false }) => {
-  const educatorData = dummyEducatorData;
   const { user } = useUser();
   const { openSignIn } = useClerk();
-  const { navigate } = useContext(AppContext);
   const [menuOpen, setMenuOpen] = useState(false);
   const location = useLocation();
 

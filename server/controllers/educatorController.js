@@ -2,8 +2,9 @@ import { clerkClient } from "@clerk/express";
 import connectDB from "../configs/mongodb.js";
 import { cloudinary } from "../configs/cloudinary.js";
 import Educator from "../models/Educator.js";
-//update the user role to educator
-// This function updates the user's role to "educator" in Clerk and connects to the database
+import User from "../models/User.js";
+
+//update the user role to educator and create educator record
 export const updateRoleToEducator = async (req, res) => {
   try {
     console.log("🔗 Connecting to database...");
@@ -28,21 +29,112 @@ export const updateRoleToEducator = async (req, res) => {
         },
       });
     }
-    // Update the user's role in Clerk
-    console.log(`🔄 Updating user role for user ID: ${userId}`);
-    await clerkClient.users.updateUserMetadata(userId, {
-      // Set the role to "educator"
 
+    console.log(`🔄 Processing educator role update for user: ${userId}`);
+
+    // 1. Check if user exists in our database
+    let user = await User.findById(userId);
+    if (!user) {
+      console.log("❌ User not found in database:", userId);
+      return res.status(404).json({
+        success: false,
+        error: "User not found. Please ensure you're properly signed in.",
+      });
+    }
+
+    console.log("✅ Found user:", user.username, user.email);
+
+    // 2. Check if educator record already exists
+    let educator = await Educator.findById(userId);
+    if (educator) {
+      console.log("ℹ️ Educator record already exists:", userId);
+
+      // Update user role in database
+      if (!user.isEducator) {
+        user.isEducator = true;
+        await user.save();
+        console.log("✅ Updated user.isEducator to true");
+      }
+
+      // Update role in Clerk
+      await clerkClient.users.updateUserMetadata(userId, {
+        publicMetadata: {
+          role: "educator",
+        },
+      });
+
+      return res.status(200).json({
+        success: true,
+        message: "User is already an educator",
+        educator: {
+          _id: educator._id,
+          name: educator.name,
+          email: educator.email,
+          totalCourses: educator.totalCourses,
+          totalEnrollments: educator.totalEnrollments,
+          totalEarnings: educator.totalEarnings,
+        },
+      });
+    }
+
+    // 3. Create new educator record
+    console.log("📝 Creating new educator record...");
+    const educatorData = {
+      _id: userId,
+      name: user.username,
+      email: user.email,
+      imageUrl: user.imageUrl,
+      isEducator: true,
+      publishedCourses: [],
+      totalCourses: 0,
+      totalEnrollments: 0,
+      totalEarnings: 0,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+
+    educator = new Educator(educatorData);
+    await educator.save();
+    console.log("✅ Educator record created:", educator._id);
+
+    // 4. Update user record to mark as educator
+    user.isEducator = true;
+    await user.save();
+    console.log("✅ Updated user.isEducator to true");
+
+    // 5. Update the user's role in Clerk
+    console.log(`🔄 Updating user role in Clerk for user ID: ${userId}`);
+    await clerkClient.users.updateUserMetadata(userId, {
       publicMetadata: {
         role: "educator",
       },
     });
+    console.log("✅ Clerk role updated to educator");
+
     return res.status(200).json({
+      success: true,
       message: "User role updated to educator successfully",
+      educator: {
+        _id: educator._id,
+        name: educator.name,
+        email: educator.email,
+        totalCourses: educator.totalCourses,
+        totalEnrollments: educator.totalEnrollments,
+        totalEarnings: educator.totalEarnings,
+        createdAt: educator.createdAt,
+      },
     });
   } catch (error) {
-    console.error("❌ Error updating user role:", error.message);
-    return res.status(500).json({ error: "Internal server error" });
+    console.error("❌ Error updating user role:", {
+      message: error.message,
+      stack: error.stack,
+      name: error.name,
+    });
+    return res.status(500).json({
+      success: false,
+      error: "Internal server error",
+      message: error.message,
+    });
   }
 };
 
@@ -452,7 +544,10 @@ export const getEnrolledStudentsData = async (req, res) => {
     const auth = req.auth();
     const { userId: educatorId } = auth || {};
 
+    console.log("🔍 Getting enrolled students for educator:", educatorId);
+
     if (!educatorId) {
+      console.error("❌ No educator ID provided");
       return res.status(400).json({ error: "User authentication required" });
     }
 
@@ -466,15 +561,25 @@ export const getEnrolledStudentsData = async (req, res) => {
 
     // First, get courses by educator ID
     const courses = await Course.find({ educator: educatorId });
+    console.log(
+      `📚 Found ${courses.length} courses for educator ${educatorId}`
+    );
 
     if (!courses || courses.length === 0) {
-      return res
-        .status(404)
-        .json({ error: "No courses found for this educator" });
+      console.log(
+        "ℹ️ No courses found for educator, returning empty enrolled students data"
+      );
+      return res.status(200).json({
+        enrolledStudentsData: [],
+        totalPurchases: 0,
+        validPurchases: 0,
+        message: "No courses found for this educator",
+      });
     }
 
     // Get course IDs
     const courseIds = courses.map((course) => course._id);
+    console.log("🎯 Course IDs:", courseIds);
 
     // Find purchases for these courses with completed status
     const purchases = await Purchase.find({
@@ -484,28 +589,56 @@ export const getEnrolledStudentsData = async (req, res) => {
       .populate("userId", "name imageUrl")
       .populate("courseId", "courseTitle courseThumbnail coursePrice");
 
+    console.log(
+      `💰 Found ${purchases.length} completed purchases for educator ${educatorId}`
+    );
+
+    // Check for null populated fields
+    const invalidPurchases = purchases.filter((p) => !p.userId || !p.courseId);
+    if (invalidPurchases.length > 0) {
+      console.warn(
+        `⚠️ Found ${invalidPurchases.length} purchases with null populated fields - these will be filtered out`
+      );
+      invalidPurchases.forEach((p) => {
+        console.warn(
+          `Purchase ${p._id}: userId=${!!p.userId}, courseId=${!!p.courseId}`
+        );
+      });
+    }
+
     // Format the enrolled students data
-    const enrolledStudentsData = purchases.map((purchase) => ({
-      studentId: purchase.userId._id,
-      studentName: purchase.userId.name,
-      studentImage: purchase.userId.imageUrl,
-      courseId: purchase.courseId._id,
-      courseTitle: purchase.courseId.courseTitle,
-      courseThumbnail: purchase.courseId.courseThumbnail,
-      coursePrice: purchase.courseId.coursePrice,
-      purchaseDate: purchase.purchaseDate,
-      amount: purchase.amount,
-      transactionId: purchase._id,
-    }));
+    const enrolledStudentsData = purchases
+      .filter((purchase) => purchase.userId && purchase.courseId) // Filter out null populated fields
+      .map((purchase) => ({
+        studentId: purchase.userId._id,
+        studentName: purchase.userId.name,
+        studentImage: purchase.userId.imageUrl,
+        courseId: purchase.courseId._id,
+        courseTitle: purchase.courseId.courseTitle,
+        courseThumbnail: purchase.courseId.courseThumbnail,
+        coursePrice: purchase.courseId.coursePrice,
+        purchaseDate: purchase.purchaseDate,
+        amount: purchase.amount,
+        transactionId: purchase._id,
+      }));
+
+    console.log(
+      `✅ Successfully processed ${enrolledStudentsData.length} enrolled students`
+    );
 
     return res.status(200).json({
       enrolledStudentsData,
       totalPurchases: purchases.length,
+      validPurchases: enrolledStudentsData.length,
       message: "Enrolled students data fetched successfully",
     });
   } catch (error) {
-    console.error("❌ Error fetching enrolled students data:", error.message);
-    return res.status(500).json({ error: "Internal server error" });
+    console.error("❌ Error fetching enrolled students data:", error);
+    console.error("❌ Error stack:", error.stack);
+    return res.status(500).json({
+      error: "Internal server error",
+      message: error.message,
+    });
   }
 };
 
@@ -590,29 +723,66 @@ export const updateEducatorDashboard = async (req, res) => {
 
 // Get educator dashboard info (total courses, enrollments, earnings)
 // Get educator dashboard info (total courses, enrollments, earnings, publishedCourses)
+// Enhanced to ensure educator record exists
 export const getEducatorInfo = async (req, res) => {
   try {
     const auth = req.auth();
     const { userId: educatorId } = auth || {};
 
     if (!educatorId) {
-      return res.status(400).json({ error: "User authentication required" });
+      return res.status(400).json({
+        success: false,
+        error: "User authentication required",
+      });
     }
 
     await connectDB();
 
-    const Course = (await import("../models/Course.js")).default;
+    // 1. Check if educator record exists, create if it doesn't
+    let educator = await Educator.findById(educatorId);
+    if (!educator) {
+      console.log("📝 Educator record not found, checking user data...");
 
-    // 🔹 Fetch all courses of this educator
-    const courses = await Course.find({ educator: educatorId });
+      // Get user data to create educator record
+      const user = await User.findById(educatorId);
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          error: "User not found",
+        });
+      }
 
-    if (!courses.length) {
-      return res
-        .status(404)
-        .json({ error: "No courses found for this educator" });
+      // Create educator record from user data
+      const educatorData = {
+        _id: educatorId,
+        name: user.username,
+        email: user.email,
+        imageUrl: user.imageUrl,
+        isEducator: true,
+        publishedCourses: [],
+        totalCourses: 0,
+        totalEnrollments: 0,
+        totalEarnings: 0,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+
+      educator = new Educator(educatorData);
+      await educator.save();
+
+      // Update user record
+      user.isEducator = true;
+      await user.save();
+
+      console.log("✅ Created educator record for user:", educatorId);
     }
 
-    // 🔹 Build publishedCourses array
+    const Course = (await import("../models/Course.js")).default;
+
+    // 2. Fetch all courses of this educator
+    const courses = await Course.find({ educator: educatorId });
+
+    // 3. Build publishedCourses array
     const publishedCourses = courses.map((course) => {
       const totalEnrollments = course.enrolledStudents.length;
       const totalEarnings = totalEnrollments * (course.coursePrice || 0);
@@ -634,7 +804,7 @@ export const getEducatorInfo = async (req, res) => {
       };
     });
 
-    // 🔹 Totals
+    // 4. Calculate totals
     const totalCourses = publishedCourses.length;
     const totalEnrollments = publishedCourses.reduce(
       (sum, course) => sum + course.totalEnrollments,
@@ -645,19 +815,41 @@ export const getEducatorInfo = async (req, res) => {
       0
     );
 
+    // 5. Update educator record with latest data
+    educator.publishedCourses = publishedCourses;
+    educator.totalCourses = totalCourses;
+    educator.totalEnrollments = totalEnrollments;
+    educator.totalEarnings = totalEarnings;
+    educator.updatedAt = new Date();
+
+    await educator.save();
+
     return res.status(200).json({
       success: true,
       data: {
         educatorId,
+        name: educator.name,
+        email: educator.email,
+        imageUrl: educator.imageUrl,
         totalCourses,
         totalEnrollments,
         totalEarnings,
         publishedCourses, // ✅ Include full published courses list
+        createdAt: educator.createdAt,
+        updatedAt: educator.updatedAt,
       },
     });
   } catch (error) {
-    console.error("❌ Error fetching educator info:", error);
-    return res.status(500).json({ error: "Internal server error" });
+    console.error("❌ Error fetching educator info:", {
+      message: error.message,
+      stack: error.stack,
+      name: error.name,
+    });
+    return res.status(500).json({
+      success: false,
+      error: "Internal server error",
+      message: error.message,
+    });
   }
 };
 

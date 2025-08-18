@@ -1,3 +1,4 @@
+/* eslint-disable no-unused-vars */
 import React, { useContext, useState, useEffect } from "react";
 import { assets } from "./../../assets/assets";
 import { Link, useLocation } from "react-router-dom";
@@ -33,6 +34,7 @@ const Navbar = () => {
     cartVibrating,
     pendingPurchases = [],
     fetchPendingPurchases,
+    fetchEducatorDashboard,
   } = useContext(AppContext);
 
   // Debug logging for pending purchases
@@ -47,43 +49,105 @@ const Navbar = () => {
 
   const becomeEducator = async () => {
     try {
+      // If already an educator, just navigate to dashboard
       if (isEducator) {
+        console.log("🏫 User is already an educator, navigating to dashboard");
         navigate("/educator");
         return;
       }
-      const token = await getToken();
 
+      // Check if user is signed in
+      if (!user) {
+        console.log("👤 User not signed in, opening sign-in modal");
+        toast.info("Please sign in to become an educator");
+        openSignIn();
+        return;
+      }
+
+      console.log("🔄 Starting educator role assignment process...");
+
+      const token = await getToken();
       if (!token) {
+        console.error("❌ No authentication token available");
         toast.error("Authentication token missing. Please sign in again.");
         openSignIn();
         return;
       }
 
+      // Show loading state
+      toast.info("Setting up your educator account...");
+
+      console.log("📡 Sending educator role update request...");
       const { data } = await axios.post(
-        backendUrl + "/api/educator/update-role-educator",
-        null, // sending no body explicitly
+        `${backendUrl}/api/educator/update-role-educator`,
+        {}, // Empty body
         {
           headers: {
             Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
           },
         }
       );
 
+      console.log("📥 Educator role update response:", data);
+
       if (data.success) {
+        console.log("✅ Educator role assigned successfully");
+
+        // Update local state immediately
         setIsEducator(true);
-        toast.success("You are now an educator!");
-        navigate("/educator");
+
+        // Refresh educator dashboard data
+        try {
+          await fetchEducatorDashboard();
+        } catch (dashboardError) {
+          console.warn(
+            "⚠️ Failed to fetch educator dashboard after role assignment:",
+            dashboardError
+          );
+        }
+
+        // Show success message and navigate
+        toast.success(
+          "🎉 Welcome to Edulecta Educators! You can now create and manage courses."
+        );
+
+        // Add a small delay to let the success message show
+        setTimeout(() => {
+          navigate("/educator");
+        }, 1000);
       } else {
-        toast.error(data.message || "Failed to become educator");
+        console.error("❌ Educator role assignment failed:", data);
+        toast.error(
+          data.message || "Failed to become educator. Please try again."
+        );
       }
     } catch (error) {
-      console.error("Error becoming educator:", error);
-      // More detailed error message
-      const message =
-        error.response?.data?.message ||
-        error.message ||
-        "Error becoming educator";
-      toast.error(message);
+      console.error("❌ Error in becomeEducator:", {
+        message: error.message,
+        response: error.response?.data,
+        status: error.response?.status,
+        stack: error.stack,
+      });
+
+      // Enhanced error handling
+      let errorMessage = "Error becoming educator. Please try again.";
+
+      if (error.response?.status === 401) {
+        errorMessage = "Authentication expired. Please sign in again.";
+        setTimeout(() => openSignIn(), 1000);
+      } else if (error.response?.status === 404) {
+        errorMessage =
+          "User account not found. Please ensure you're properly signed in.";
+      } else if (error.response?.status === 500) {
+        errorMessage = "Server error. Please try again in a few moments.";
+      } else if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+
+      toast.error(errorMessage);
     }
   };
 
@@ -113,7 +177,7 @@ const Navbar = () => {
     <>
       {/* Mobile Navigation Bar */}
       <div
-        className={`md:hidden fixed top-0 left-0 right-0 z-50 px-4 py-3 border-b border-gray-200/60 shadow-lg backdrop-blur-lg ${
+        className={`md:hidden fixed top-0 left-0 right-0 z-50 px-4 py-2 border-b border-gray-200/60 shadow-lg backdrop-blur-lg ${
           isCourseListPage
             ? "bg-white/98"
             : "bg-gradient-to-r from-blue-50/98 via-indigo-50/98 to-purple-50/98"
@@ -341,7 +405,7 @@ const Navbar = () => {
 
       {/* Desktop Navigation Bar */}
       <div
-        className={`hidden md:block fixed top-0 left-0 right-0 z-50 px-6 lg:px-8 border-b border-gray-200/60 py-4 shadow-lg backdrop-blur-lg ${
+        className={`hidden md:block fixed top-0 left-0 right-0 z-50 px-6 lg:px-8 border-b border-gray-200/60 py-3 shadow-lg backdrop-blur-lg ${
           isCourseListPage
             ? "bg-white/98"
             : "bg-gradient-to-r from-blue-50/98 via-indigo-50/98 to-purple-50/98"

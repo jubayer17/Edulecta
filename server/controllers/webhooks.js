@@ -74,21 +74,28 @@ export const handleClerkWebhook = async (req, res) => {
             return res.status(200).json({ message: "User already exists" });
           }
 
+          // Enhanced user data extraction with proper Google OAuth handling
           const userData = {
             _id: data.id,
             username: (() => {
-              // Try different fallback options for username
-              if (data.username && data.username !== "null") {
-                return data.username;
+              // Priority order for username extraction
+              // 1. Try explicit username field
+              if (
+                data.username &&
+                data.username !== "null" &&
+                data.username.trim() !== ""
+              ) {
+                return data.username.trim();
               }
 
+              // 2. Try full name from first_name + last_name
               const firstName =
                 data.first_name && data.first_name !== "null"
-                  ? data.first_name
+                  ? data.first_name.trim()
                   : "";
               const lastName =
                 data.last_name && data.last_name !== "null"
-                  ? data.last_name
+                  ? data.last_name.trim()
                   : "";
               const fullName = `${firstName} ${lastName}`.trim();
 
@@ -96,43 +103,156 @@ export const handleClerkWebhook = async (req, res) => {
                 return fullName;
               }
 
-              // Fallback to email prefix if no name available
-              const email = data.email_addresses?.[0]?.email_address || "";
-              if (email) {
-                return email.split("@")[0];
+              // 3. Try external_accounts for Google data
+              if (
+                data.external_accounts &&
+                Array.isArray(data.external_accounts)
+              ) {
+                for (const account of data.external_accounts) {
+                  if (
+                    account.provider === "oauth_google" &&
+                    account.first_name
+                  ) {
+                    const googleFirstName = account.first_name || "";
+                    const googleLastName = account.last_name || "";
+                    const googleFullName =
+                      `${googleFirstName} ${googleLastName}`.trim();
+                    if (googleFullName) return googleFullName;
+                  }
+                }
               }
 
-              // Final fallback
-              return `User_${data.id.slice(-6)}`;
+              // 4. Try primary email address name part
+              const primaryEmail =
+                data.email_addresses?.find(
+                  (e) => e.id === data.primary_email_address_id
+                )?.email_address ||
+                data.email_addresses?.[0]?.email_address ||
+                "";
+
+              if (primaryEmail) {
+                const emailUsername = primaryEmail.split("@")[0];
+                // Clean up email username (remove dots, numbers, make readable)
+                const cleanUsername = emailUsername
+                  .replace(/[^a-zA-Z]/g, " ")
+                  .trim();
+                if (cleanUsername && cleanUsername.length > 2) {
+                  return (
+                    cleanUsername.charAt(0).toUpperCase() +
+                    cleanUsername.slice(1)
+                  );
+                }
+                return emailUsername;
+              }
+
+              // 5. Final fallback
+              return `User ${data.id.slice(-6)}`;
             })(),
-            email: data.email_addresses?.[0]?.email_address || "",
+
+            email: (() => {
+              // Get primary email or first available email
+              const primaryEmail = data.email_addresses?.find(
+                (e) => e.id === data.primary_email_address_id
+              )?.email_address;
+              if (primaryEmail) return primaryEmail;
+
+              // Fallback to first email
+              const firstEmail = data.email_addresses?.[0]?.email_address;
+              if (firstEmail) return firstEmail;
+
+              // Extract from external accounts if available
+              if (
+                data.external_accounts &&
+                Array.isArray(data.external_accounts)
+              ) {
+                for (const account of data.external_accounts) {
+                  if (
+                    account.provider === "oauth_google" &&
+                    account.email_address
+                  ) {
+                    return account.email_address;
+                  }
+                }
+              }
+
+              return `${data.id}@edulecta.local`; // Fallback email
+            })(),
+
             password: "clerk_managed",
-            imageUrl:
-              data.image_url ||
-              data.profile_image_url ||
-              "https://via.placeholder.com/150",
+
+            imageUrl: (() => {
+              // Priority order for profile image
+              if (data.image_url && data.image_url !== "")
+                return data.image_url;
+              if (data.profile_image_url && data.profile_image_url !== "")
+                return data.profile_image_url;
+
+              // Check external accounts for Google profile image
+              if (
+                data.external_accounts &&
+                Array.isArray(data.external_accounts)
+              ) {
+                for (const account of data.external_accounts) {
+                  if (account.provider === "oauth_google" && account.picture) {
+                    return account.picture;
+                  }
+                }
+              }
+
+              return "https://via.placeholder.com/150?text=User";
+            })(),
+
             enrolledCourses: [],
+            isEducator: false, // Initialize as false
             createdAt: data.created_at ? new Date(data.created_at) : new Date(),
             timestamp: new Date(),
           };
 
           console.log(
-            "📝 Creating user with data:",
+            "📝 Creating user with enhanced data:",
             JSON.stringify(userData, null, 2)
           );
           await User.create(userData);
-          console.log("✅ User created:", userData._id);
-          return res.status(200).json({ message: "User created successfully" });
+          console.log("✅ User created successfully:", userData._id);
+          console.log("📧 Email:", userData.email);
+          console.log("👤 Username:", userData.username);
+
+          return res.status(200).json({
+            message: "User created successfully",
+            user: {
+              id: userData._id,
+              username: userData.username,
+              email: userData.email,
+            },
+          });
         } catch (err) {
           console.error("❌ Detailed create error:", {
             message: err.message,
             code: err.code,
             name: err.name,
+            stack: err.stack,
           });
 
           // Handle duplicate key error
           if (err.code === 11000) {
             console.log("🔄 Duplicate key error, user might already exist");
+            // Try to fetch existing user and return success
+            try {
+              const existingUser = await User.findById(data.id);
+              if (existingUser) {
+                return res.status(200).json({
+                  message: "User already exists",
+                  user: {
+                    id: existingUser._id,
+                    username: existingUser.username,
+                    email: existingUser.email,
+                  },
+                });
+              }
+            } catch (fetchError) {
+              console.error("Error fetching existing user:", fetchError);
+            }
+
             return res
               .status(200)
               .json({ message: "User already exists (duplicate key)" });
@@ -147,20 +267,30 @@ export const handleClerkWebhook = async (req, res) => {
 
       case "user.updated": {
         try {
+          console.log("🔄 Updating user:", data.id);
+          console.log(
+            "🔍 Update data received:",
+            JSON.stringify(data, null, 2)
+          );
+
           const updateData = {
             username: (() => {
-              // Try different fallback options for username
-              if (data.username && data.username !== "null") {
-                return data.username;
+              // Enhanced username extraction for updates
+              if (
+                data.username &&
+                data.username !== "null" &&
+                data.username.trim() !== ""
+              ) {
+                return data.username.trim();
               }
 
               const firstName =
                 data.first_name && data.first_name !== "null"
-                  ? data.first_name
+                  ? data.first_name.trim()
                   : "";
               const lastName =
                 data.last_name && data.last_name !== "null"
-                  ? data.last_name
+                  ? data.last_name.trim()
                   : "";
               const fullName = `${firstName} ${lastName}`.trim();
 
@@ -168,28 +298,150 @@ export const handleClerkWebhook = async (req, res) => {
                 return fullName;
               }
 
-              // Fallback to email prefix if no name available
-              const email = data.email_addresses?.[0]?.email_address || "";
-              if (email) {
-                return email.split("@")[0];
+              // Try external_accounts for Google data
+              if (
+                data.external_accounts &&
+                Array.isArray(data.external_accounts)
+              ) {
+                for (const account of data.external_accounts) {
+                  if (
+                    account.provider === "oauth_google" &&
+                    account.first_name
+                  ) {
+                    const googleFirstName = account.first_name || "";
+                    const googleLastName = account.last_name || "";
+                    const googleFullName =
+                      `${googleFirstName} ${googleLastName}`.trim();
+                    if (googleFullName) return googleFullName;
+                  }
+                }
               }
 
-              // Final fallback
-              return `User_${data.id.slice(-6)}`;
+              // Fallback to email prefix if no name available
+              const primaryEmail =
+                data.email_addresses?.find(
+                  (e) => e.id === data.primary_email_address_id
+                )?.email_address ||
+                data.email_addresses?.[0]?.email_address ||
+                "";
+              if (primaryEmail) {
+                const emailUsername = primaryEmail.split("@")[0];
+                const cleanUsername = emailUsername
+                  .replace(/[^a-zA-Z]/g, " ")
+                  .trim();
+                if (cleanUsername && cleanUsername.length > 2) {
+                  return (
+                    cleanUsername.charAt(0).toUpperCase() +
+                    cleanUsername.slice(1)
+                  );
+                }
+                return emailUsername;
+              }
+
+              return `User ${data.id.slice(-6)}`;
             })(),
-            email: data.email_addresses?.[0]?.email_address || "",
-            imageUrl:
-              data.image_url ||
-              data.profile_image_url ||
-              "https://via.placeholder.com/150",
+
+            email: (() => {
+              const primaryEmail = data.email_addresses?.find(
+                (e) => e.id === data.primary_email_address_id
+              )?.email_address;
+              if (primaryEmail) return primaryEmail;
+
+              const firstEmail = data.email_addresses?.[0]?.email_address;
+              if (firstEmail) return firstEmail;
+
+              // Extract from external accounts if available
+              if (
+                data.external_accounts &&
+                Array.isArray(data.external_accounts)
+              ) {
+                for (const account of data.external_accounts) {
+                  if (
+                    account.provider === "oauth_google" &&
+                    account.email_address
+                  ) {
+                    return account.email_address;
+                  }
+                }
+              }
+
+              return null; // Don't update if no email found
+            })(),
+
+            imageUrl: (() => {
+              if (data.image_url && data.image_url !== "")
+                return data.image_url;
+              if (data.profile_image_url && data.profile_image_url !== "")
+                return data.profile_image_url;
+
+              // Check external accounts for Google profile image
+              if (
+                data.external_accounts &&
+                Array.isArray(data.external_accounts)
+              ) {
+                for (const account of data.external_accounts) {
+                  if (account.provider === "oauth_google" && account.picture) {
+                    return account.picture;
+                  }
+                }
+              }
+
+              return null; // Don't update if no image found
+            })(),
+
             timestamp: new Date(),
           };
-          await User.findByIdAndUpdate(data.id, updateData, { new: true });
-          console.log("✅ User updated:", data.id);
-          return res.status(200).json({ message: "User updated successfully" });
+
+          // Remove null values from update data
+          Object.keys(updateData).forEach((key) => {
+            if (updateData[key] === null || updateData[key] === undefined) {
+              delete updateData[key];
+            }
+          });
+
+          console.log(
+            "📝 Updating user with data:",
+            JSON.stringify(updateData, null, 2)
+          );
+
+          const updatedUser = await User.findByIdAndUpdate(
+            data.id,
+            updateData,
+            {
+              new: true,
+              runValidators: true,
+            }
+          );
+
+          if (updatedUser) {
+            console.log("✅ User updated successfully:", data.id);
+            console.log("📧 Updated Email:", updatedUser.email);
+            console.log("👤 Updated Username:", updatedUser.username);
+          } else {
+            console.warn("⚠️ User not found for update:", data.id);
+          }
+
+          return res.status(200).json({
+            message: "User updated successfully",
+            user: updatedUser
+              ? {
+                  id: updatedUser._id,
+                  username: updatedUser.username,
+                  email: updatedUser.email,
+                }
+              : null,
+          });
         } catch (err) {
-          console.error("❌ Failed to update user:", err.message);
-          return res.status(500).json({ error: "Database update error" });
+          console.error("❌ Failed to update user:", {
+            message: err.message,
+            code: err.code,
+            userId: data.id,
+            stack: err.stack,
+          });
+          return res.status(500).json({
+            error: "Database update error",
+            details: err.message,
+          });
         }
       }
 

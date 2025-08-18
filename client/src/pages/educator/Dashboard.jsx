@@ -135,7 +135,7 @@ const Dashboard = () => {
             </div>
           </div>
           <div className="text-3xl font-bold text-yellow-600 mb-2">
-            $ {totalEarnings}
+            $ {totalEarnings.toFixed(2)}
           </div>
           <p className="text-gray-600 text-sm font-medium">Total Earnings</p>
         </div>

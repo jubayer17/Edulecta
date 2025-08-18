@@ -25,6 +25,10 @@ const AddCourse = () => {
     isPublished: true, // Added this field that appears in your DB
   });
 
+  // State for fetched categories
+  const [categories, setCategories] = useState([]);
+  const [categoriesLoading, setCategoriesLoading] = useState(true);
+
   const [detailedThumbnailPreview, setDetailedThumbnailPreview] =
     useState(null);
   const quillRef = useRef(null);
@@ -64,6 +68,55 @@ const AddCourse = () => {
       quillRef.current = quill;
     }
   }, []);
+
+  // Fetch categories from API
+  useEffect(() => {
+    const fetchCategories = async () => {
+      try {
+        setCategoriesLoading(true);
+        const response = await fetch(`${backendUrl}/api/category`);
+        const data = await response.json();
+        
+        if (data.success && data.categories) {
+          // Extract category names from the API response
+          const categoryNames = data.categories.map(cat => cat.name);
+          setCategories(categoryNames);
+        } else {
+          console.error("Failed to fetch categories:", data);
+          // Fallback to default categories if API fails
+          setCategories([
+            "Web Development",
+            "Mobile Development", 
+            "Data Science",
+            "Machine Learning",
+            "Cybersecurity",
+            "Programming Languages",
+            "Database",
+            "Cloud Computing",
+            "Digital Marketing",
+          ]);
+        }
+      } catch (error) {
+        console.error("Error fetching categories:", error);
+        // Fallback to default categories if API fails
+        setCategories([
+          "Web Development",
+          "Mobile Development",
+          "Data Science", 
+          "Machine Learning",
+          "Cybersecurity",
+          "Programming Languages",
+          "Database",
+          "Cloud Computing",
+          "Digital Marketing",
+        ]);
+      } finally {
+        setCategoriesLoading(false);
+      }
+    };
+
+    fetchCategories();
+  }, [backendUrl]);
 
   // Function to calculate discount percentage from offer price
   const calculateDiscount = (originalPrice, offerPrice) => {
@@ -418,18 +471,6 @@ const AddCourse = () => {
     }
   };
 
-  const categories = [
-    "Web Development",
-    "Mobile Development",
-    "Data Science",
-    "Machine Learning",
-    "Cybersecurity",
-    "Programming Languages",
-    "Database",
-    "Cloud Computing",
-    "Digital Marketing",
-  ];
-
   return (
     <div className="min-h-screen flex flex-col items-start justify-between md:p-8 md:pt-0 p-4 pt-8 bg-gradient-to-br from-indigo-50/40 via-purple-50/30 to-pink-50/40">
       {/* Main page header */}
@@ -537,13 +578,20 @@ const AddCourse = () => {
                   onChange={handleInputChange}
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-all duration-200 bg-white/50 backdrop-blur-sm"
                   required
+                  disabled={categoriesLoading}
                 >
-                  <option value="">Select a category</option>
-                  {categories.map((category, index) => (
-                    <option key={index} value={category}>
-                      {category}
-                    </option>
-                  ))}
+                  {categoriesLoading ? (
+                    <option value="">Loading categories...</option>
+                  ) : (
+                    <>
+                      <option value="">Select a category</option>
+                      {categories.map((category, index) => (
+                        <option key={index} value={category}>
+                          {category}
+                        </option>
+                      ))}
+                    </>
+                  )}
                 </select>
               </div>
 
