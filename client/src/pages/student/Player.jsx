@@ -22,6 +22,7 @@ const Player = () => {
     getToken,
     userData,
     fullEnrolledCourses,
+    fetchAllCourses,
   } = useContext(AppContext);
 
   const [courseData, setCourseData] = useState(null);
@@ -56,8 +57,20 @@ const Player = () => {
       let found = allCourses.find((c) => c._id === courseId);
       if (!found) found = enrolledCourses.find((c) => c._id === courseId);
       setCourseData(found || null);
+
+      // Load user's existing rating for this course
+      if (found && userData?.id) {
+        const existingRating = found.courseRatings?.find(
+          (rating) => rating.user === userData.id
+        );
+        if (existingRating) {
+          setUserRating(existingRating.rating);
+        } else {
+          setUserRating(0);
+        }
+      }
     }
-  }, [courseId, allCourses, enrolledCourses]);
+  }, [courseId, allCourses, enrolledCourses, userData?.id]);
 
   const toggleChapter = (chapterIndex) => {
     setExpandedChapters((prev) => ({
@@ -90,8 +103,59 @@ const Player = () => {
     }
   };
 
-  const handleRateSubmit = (ratingValue) => {
+  const handleRateSubmit = async (ratingValue) => {
     setUserRating(ratingValue);
+
+    try {
+      const token = await getToken();
+      const response = await axios.post(
+        `${backendUrl}/api/user/add-rating`,
+        {
+          courseId: courseId,
+          rating: ratingValue,
+        },
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+
+      if (response.data.success) {
+        toast.success("Rating submitted successfully!");
+
+        // Refresh all courses to get updated data
+        fetchAllCourses();
+
+        // Update the course data in local state to reflect the new rating
+        setCourseData((prev) => {
+          if (!prev) return prev;
+
+          // Find if user already rated this course
+          const existingRatingIndex = prev.courseRatings?.findIndex(
+            (rating) => rating.user === userData?.id
+          );
+
+          let updatedRatings = [...(prev.courseRatings || [])];
+
+          if (existingRatingIndex !== -1) {
+            // Update existing rating
+            updatedRatings[existingRatingIndex].rating = ratingValue;
+          } else {
+            // Add new rating
+            updatedRatings.push({ user: userData?.id, rating: ratingValue });
+          }
+
+          return { ...prev, courseRatings: updatedRatings };
+        });
+      }
+    } catch (error) {
+      console.error("Error submitting rating:", error);
+      const errorMessage =
+        error.response?.data?.message || "Failed to submit rating";
+      toast.error(errorMessage);
+
+      // Reset the rating on error
+      setUserRating(0);
+    }
   };
 
   // Helper: extract YouTube video ID from URL
@@ -147,7 +211,7 @@ const Player = () => {
   return (
     <>
       <div className="min-h-screen flex flex-col">
-        <div className="flex-1 flex flex-col-reverse p-4 sm:p-6 lg:p-10 lg:grid lg:grid-cols-2 gap-6 lg:gap-10 lg:px-36 lg:items-start">
+        <div className="flex-1 flex flex-col-reverse p-4 sm:p-6 lg:p-8 lg:grid lg:grid-cols-[3fr_2fr] gap-6 lg:gap-8 lg:px-6 xl:px-12 lg:items-start">
           {/* Left Column: Course Structure */}
           <div className="pt-2 text-gray-800 flex flex-col">
             <h2 className="text-lg lg:text-xl font-semibold">
@@ -156,7 +220,7 @@ const Player = () => {
             <p className="text-sm text-gray-600 mb-4">
               {totalLectures} lectures • {courseDuration}
             </p>
-            <div className="pt-3 lg:pt-5 flex-1">
+            <div className="pt-2 lg:pt-3 flex-1">
               {courseData.courseContent &&
                 courseData.courseContent.map((chapter, index) => (
                   <div
@@ -164,7 +228,7 @@ const Player = () => {
                     className="mb-3 lg:mb-4 border border-gray-200 rounded-lg lg:rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-all duration-300"
                   >
                     <div
-                      className="flex items-center justify-between p-3 lg:p-5 bg-gradient-to-r from-gray-50 to-gray-100 hover:from-blue-50 hover:to-blue-100 cursor-pointer transition-all duration-300 ease-in-out"
+                      className="flex items-center justify-between p-3 lg:p-4 bg-gradient-to-r from-gray-50 to-gray-100 hover:from-blue-50 hover:to-blue-100 cursor-pointer transition-all duration-300 ease-in-out"
                       onClick={() => toggleChapter(index)}
                     >
                       <div className="flex items-center gap-2 lg:gap-3">
@@ -207,7 +271,7 @@ const Player = () => {
                           return (
                             <div
                               key={lectureIndex}
-                              className="group flex items-center justify-between px-3 lg:px-6 py-3 lg:py-4 hover:bg-gradient-to-r hover:from-blue-50 cursor-pointer hover:to-indigo-50 border-b border-gray-100 last:border-b-0 transition-all duration-300 ease-in-out transform hover:translate-x-1"
+                              className="group flex items-center justify-between px-3 lg:px-5 py-3 lg:py-3.5 hover:bg-gradient-to-r hover:from-blue-50 cursor-pointer hover:to-indigo-50 border-b border-gray-100 last:border-b-0 transition-all duration-300 ease-in-out transform hover:translate-x-1"
                             >
                               <div className="flex items-center gap-3 lg:gap-4 flex-1 min-w-0">
                                 <div
@@ -257,7 +321,7 @@ const Player = () => {
             </div>
 
             {/* Course Rating Section */}
-            <div className="mt-6 lg:mt-8 p-4 lg:p-6 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg lg:rounded-xl border border-blue-100">
+            <div className="mt-4 lg:mt-6 p-4 lg:p-5 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg lg:rounded-xl border border-blue-100">
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <div>
                   <h3 className="text-base lg:text-lg font-semibold text-gray-800 mb-1">
@@ -284,9 +348,9 @@ const Player = () => {
           </div>
 
           {/* Right Column: Video Player */}
-          <div className="lg:mt-10 flex flex-col">
+          <div className="lg:mt-4 flex flex-col">
             {/* Course Info Header */}
-            <div className="mb-4 p-4 lg:p-6 bg-white rounded-lg lg:rounded-xl border border-gray-200 shadow-sm">
+            <div className="mb-4 p-4 lg:p-5 bg-white rounded-lg lg:rounded-xl border border-gray-200 shadow-sm">
               <h1 className="text-lg lg:text-xl font-bold text-gray-800 mb-2">
                 {courseData.courseTitle}
               </h1>
@@ -316,13 +380,13 @@ const Player = () => {
                   {!isPlaying && (
                     <button
                       onClick={handlePlayOverlayClick}
-                      className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-blue-600 text-white px-6 py-3 rounded-lg text-lg font-semibold hover:bg-blue-700 transition"
+                      className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-blue-600 text-white p-4 rounded-full hover:bg-blue-700 transition-all duration-300 transform hover:scale-110 shadow-lg"
                     >
-                      ▶ Play Video
+                      <FaPlay size={24} />
                     </button>
                   )}
 
-                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mt-3 p-3 lg:p-4 bg-gray-50 rounded-lg gap-3 sm:gap-0">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mt-3 p-3 lg:p-4 bg-gray-50 rounded-lg gap-3">
                     <div className="flex items-center gap-3">
                       <span className="bg-blue-100 text-blue-700 px-2 py-1 rounded-full text-sm font-semibold flex-shrink-0">
                         {playerData.chapterNumber}.{playerData.lectureNumber}
@@ -336,7 +400,8 @@ const Player = () => {
                         </p>
                       </div>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-3 ml-3 mr-3">
+                      {/* Added proper left and right margins */}
                       <button
                         className={`px-4 py-2 rounded-lg transition-colors duration-200 font-medium text-sm flex items-center gap-2 ${
                           playerData &&

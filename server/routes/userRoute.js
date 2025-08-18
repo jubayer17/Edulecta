@@ -47,6 +47,9 @@ userRouter.post("/cleanup-old-purchases", cleanupOldPurchases);
 // Debug user purchases (protected route)
 userRouter.get("/debug-purchases", debugUserPurchases);
 
+// Get user purchases (protected route)
+userRouter.get("/purchases", getAllPurchases);
+
 // Enroll in a course (protected route)
 userRouter.post("/enroll", EnrollInCourse);
 
@@ -61,9 +64,6 @@ userRouter.get("/payment-status/:sessionId", getPaymentStatus);
 
 // Manual payment completion for testing (public route)
 userRouter.post("/manual-complete/:purchaseId", manualCompletePayment);
-
-// Get all purchases for debugging (public route)
-userRouter.get("/purchases", getAllPurchases);
 
 // Simulate webhook for testing (public route)
 userRouter.post("/simulate-webhook", simulateWebhook);

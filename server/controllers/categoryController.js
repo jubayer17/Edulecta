@@ -9,7 +9,10 @@ export const getAllCategories = async (req, res) => {
     await connectDB();
 
     // First, fetch only PUBLISHED courses to extract unique categories
-    const allCourses = await Course.find({ isPublished: true }, "courseCategory");
+    const allCourses = await Course.find(
+      { isPublished: true },
+      "courseCategory"
+    );
 
     // Extract unique course categories from published courses only
     const uniqueCourseCategories = [
@@ -68,7 +71,9 @@ export const getAllCategories = async (req, res) => {
     }
 
     // Filter out categories with 0 published courses
-    const categoriesWithCourses = categories.filter(cat => cat.courseCount > 0);
+    const categoriesWithCourses = categories.filter(
+      (cat) => cat.courseCount > 0
+    );
 
     return res.status(200).json({
       success: true,

@@ -983,9 +983,20 @@ export const manualCompletePayment = async (req, res) => {
 // Get all purchases for debugging
 export const getAllPurchases = async (req, res) => {
   try {
+    const auth = req.auth();
+    const userId = auth?.userId;
+
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        error: "User authentication required",
+      });
+    }
+
     await connectDB();
 
-    const purchases = await Purchase.find({})
+    // Get purchases for the authenticated user only
+    const purchases = await Purchase.find({ userId })
       .sort({ createdAt: -1 })
       .limit(20)
       .populate("courseId", "courseTitle")
@@ -1421,8 +1432,8 @@ export const addCourseRating = async (req, res) => {
       });
     }
 
-    const existedRatingIndex = course.ratings.findIndex(
-      (rating) => rating.userId.toString() === userId.toString()
+    const existedRatingIndex = course.courseRatings.findIndex(
+      (rating) => rating.user.toString() === userId.toString()
     );
 
     if (existedRatingIndex !== -1) {
@@ -1430,7 +1441,7 @@ export const addCourseRating = async (req, res) => {
       course.courseRatings[existedRatingIndex].rating = rating;
     } else {
       // Add a new rating
-      course.courseRatings.push({ userId, rating });
+      course.courseRatings.push({ user: userId, rating });
     }
     await course.save();
 

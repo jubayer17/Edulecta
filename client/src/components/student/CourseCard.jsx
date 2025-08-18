@@ -6,12 +6,25 @@ import { FiShoppingCart, FiHeart } from "react-icons/fi";
 import { toast } from "react-toastify";
 
 const CourseCard = ({ course }) => {
-  const { calculateRating, addToCart, cartItems, userData, navigate } =
-    useContext(AppContext);
+  const {
+    calculateRating,
+    addToCart,
+    cartItems,
+    userData,
+    navigate,
+    enrolledCourses,
+  } = useContext(AppContext);
   const rating = calculateRating(course);
 
   // Check if course is already in cart
   const isInCart = cartItems.some((item) => item._id === course._id);
+
+  // Check if user is already enrolled in this course
+  const isEnrolled = enrolledCourses.some((enrolledCourse) => {
+    const enrolledId =
+      typeof enrolledCourse === "string" ? enrolledCourse : enrolledCourse._id;
+    return enrolledId === course._id;
+  });
 
   const handleAddToCart = (e) => {
     e.preventDefault();
@@ -20,6 +33,12 @@ const CourseCard = ({ course }) => {
     // Check if user is logged in
     if (!userData) {
       toast.warn("Please sign in first to add courses to cart");
+      return;
+    }
+
+    // Double-check enrollment status (shouldn't happen since button is hidden)
+    if (isEnrolled) {
+      toast.info("You are already enrolled in this course!");
       return;
     }
 
@@ -39,6 +58,14 @@ const CourseCard = ({ course }) => {
 
     // Navigate to course details page
     navigate(`/course/${course._id}`);
+  };
+
+  const handleGoToCourse = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    // Navigate to the course player
+    navigate(`/player/${course._id}`);
   };
 
   // Calculate course duration in weeks
@@ -110,19 +137,30 @@ const CourseCard = ({ course }) => {
           )}
 
           {/* Cart Icon Only - Enhanced with better animations */}
-          <div className="absolute top-2 right-2 sm:top-3 sm:right-3">
-            <button
-              onClick={handleAddToCart}
-              className={`p-2 rounded-full shadow-lg transition-all duration-300 transform hover:scale-110 ${
-                isInCart
-                  ? "bg-green-500 text-white animate-pulse"
-                  : "bg-white/90 backdrop-blur-sm text-gray-700 hover:bg-blue-50 hover:text-blue-600"
-              }`}
-              title={isInCart ? "Already in cart" : "Add to cart"}
-            >
-              <FiShoppingCart className="w-4 h-4 sm:w-5 sm:h-5" />
-            </button>
-          </div>
+          {!isEnrolled && (
+            <div className="absolute top-2 right-2 sm:top-3 sm:right-3">
+              <button
+                onClick={handleAddToCart}
+                className={`p-2 rounded-full shadow-lg transition-all duration-300 transform hover:scale-110 ${
+                  isInCart
+                    ? "bg-green-500 text-white animate-pulse"
+                    : "bg-white/90 backdrop-blur-sm text-gray-700 hover:bg-blue-50 hover:text-blue-600"
+                }`}
+                title={isInCart ? "Already in cart" : "Add to cart"}
+              >
+                <FiShoppingCart className="w-4 h-4 sm:w-5 sm:h-5" />
+              </button>
+            </div>
+          )}
+
+          {/* Enrolled Badge */}
+          {isEnrolled && (
+            <div className="absolute top-2 right-2 sm:top-3 sm:right-3">
+              <div className="bg-green-500 text-white text-xs font-bold px-2 py-1 sm:px-3 sm:py-1 rounded-full shadow-lg">
+                Enrolled
+              </div>
+            </div>
+          )}
 
           {/* Play Button Overlay for Mobile */}
           <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center sm:hidden">
@@ -149,7 +187,7 @@ const CourseCard = ({ course }) => {
 
           {/* Instructor name */}
           <p className="text-xs sm:text-sm text-gray-500 mb-1.5 font-medium truncate">
-            by Jubayer Ahmed
+            by {course.educator?.username || "Instructor"}
           </p>
 
           {/* Rating and enrollment section */}
@@ -159,20 +197,31 @@ const CourseCard = ({ course }) => {
               <div className="flex items-center gap-0.5">
                 {[...Array(5)].map((_, i) => {
                   const filled = rating >= i + 1;
-                  const half = rating >= i + 0.5;
+                  const half = rating >= i + 0.5 && rating < i + 1;
+                  const starWidth = filled ? "100%" : half ? "50%" : "0%";
+
                   return (
-                    <img
-                      key={i}
-                      src={
-                        filled
-                          ? assets.star
-                          : half
-                          ? assets.star
-                          : assets.star_blank
-                      }
-                      alt="star"
-                      className="w-3 h-3 sm:w-4 sm:h-4"
-                    />
+                    <div key={i} className="relative w-3 h-3 sm:w-4 sm:h-4">
+                      {/* Background star (empty) */}
+                      <img
+                        src={assets.star_blank}
+                        alt="star"
+                        className="absolute inset-0 w-full h-full"
+                      />
+                      {/* Foreground star (filled or half) */}
+                      {(filled || half) && (
+                        <div
+                          className="absolute inset-0 overflow-hidden"
+                          style={{ width: starWidth }}
+                        >
+                          <img
+                            src={assets.star}
+                            alt="star"
+                            className="w-full h-full"
+                          />
+                        </div>
+                      )}
+                    </div>
                   );
                 })}
               </div>
@@ -211,42 +260,68 @@ const CourseCard = ({ course }) => {
           {/* Price and button section - pushed to bottom */}
           <div className="mt-auto space-y-2">
             {/* Price section */}
-            <div className="flex items-center gap-2">
-              {/* Offer price on the left */}
-              <span className="text-lg sm:text-xl font-bold text-blue-600">
-                ${offerPrice.toFixed(2)}
-              </span>
-              {/* Original price crossed out on the right */}
-              {hasDiscount && (
-                <span className="text-sm text-gray-400 line-through">
-                  ${coursePrice.toFixed(2)}
+            {isEnrolled ? (
+              <div className="flex items-center gap-2">
+                <span className="text-lg sm:text-xl font-bold text-green-600">
+                  Enrolled
                 </span>
-              )}
-            </div>
-
-            {/* Button section - Same height buttons */}
-            <div className="flex items-center gap-2">
-              <button
-                onClick={handleAddToCart}
-                className={`flex-1 flex items-center justify-center px-2 py-2 text-xs font-medium rounded-lg transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-offset-1 ${
-                  isInCart
-                    ? "bg-green-500 text-white hover:bg-green-600 focus:ring-green-500"
-                    : "bg-gray-100 text-gray-700 hover:bg-gray-200 focus:ring-gray-500"
-                }`}
-              >
-                <FiShoppingCart className="w-3 h-3 mr-1" />
-                <span className="whitespace-nowrap text-xs">
-                  {isInCart ? "Added" : "Add Cart"}
+                <span className="text-sm text-gray-500">
+                  You own this course
                 </span>
-              </button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                {/* Offer price on the left */}
+                <span className="text-lg sm:text-xl font-bold text-blue-600">
+                  ${offerPrice.toFixed(2)}
+                </span>
+                {/* Original price crossed out on the right */}
+                {hasDiscount && (
+                  <span className="text-sm text-gray-400 line-through">
+                    ${coursePrice.toFixed(2)}
+                  </span>
+                )}
+              </div>
+            )}
 
-              <button
-                onClick={handleEnrollNow}
-                className="flex-1 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white px-2 py-2 text-xs font-medium rounded-lg transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1"
-              >
-                <span className="whitespace-nowrap text-xs">Enroll Now</span>
-              </button>
-            </div>
+            {/* Button section - Different buttons based on enrollment status */}
+            {isEnrolled ? (
+              // Show "Continue Learning" button for enrolled courses
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handleGoToCourse}
+                  className="flex-1 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white px-2 py-2 text-xs font-medium rounded-lg transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-xl focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-1"
+                >
+                  <span className="whitespace-nowrap text-xs">
+                    Continue Learning
+                  </span>
+                </button>
+              </div>
+            ) : (
+              // Show original buttons for non-enrolled courses
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handleAddToCart}
+                  className={`flex-1 flex items-center justify-center px-2 py-2 text-xs font-medium rounded-lg transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-offset-1 ${
+                    isInCart
+                      ? "bg-green-500 text-white hover:bg-green-600 focus:ring-green-500"
+                      : "bg-gray-100 text-gray-700 hover:bg-gray-200 focus:ring-gray-500"
+                  }`}
+                >
+                  <FiShoppingCart className="w-3 h-3 mr-1" />
+                  <span className="whitespace-nowrap text-xs">
+                    {isInCart ? "Added" : "Add Cart"}
+                  </span>
+                </button>
+
+                <button
+                  onClick={handleEnrollNow}
+                  className="flex-1 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white px-2 py-2 text-xs font-medium rounded-lg transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1"
+                >
+                  <span className="whitespace-nowrap text-xs">Enroll Now</span>
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </div>

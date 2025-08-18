@@ -233,20 +233,31 @@ const CourseDetails = () => {
                 <div className="flex items-center">
                   {[...Array(5)].map((_, i) => {
                     const filled = rating >= i + 1;
-                    const half = rating >= i + 0.5;
+                    const half = rating >= i + 0.5 && rating < i + 1;
+                    const starWidth = filled ? "100%" : half ? "50%" : "0%";
+
                     return (
-                      <img
-                        key={i}
-                        src={
-                          filled
-                            ? assets.star
-                            : half
-                            ? assets.star
-                            : assets.star_blank
-                        }
-                        alt="star"
-                        className="w-5 h-5"
-                      />
+                      <div key={i} className="relative w-5 h-5">
+                        {/* Background star (empty) */}
+                        <img
+                          src={assets.star_blank}
+                          alt="star"
+                          className="absolute inset-0 w-full h-full"
+                        />
+                        {/* Foreground star (filled or half) */}
+                        {(filled || half) && (
+                          <div
+                            className="absolute inset-0 overflow-hidden"
+                            style={{ width: starWidth }}
+                          >
+                            <img
+                              src={assets.star}
+                              alt="star"
+                              className="w-full h-full"
+                            />
+                          </div>
+                        )}
+                      </div>
                     );
                   })}
                 </div>
@@ -625,16 +636,35 @@ const CourseDetails = () => {
                       {rating}
                     </span>
                     <div className="flex">
-                      {[...Array(5)].map((_, i) => (
-                        <img
-                          key={i}
-                          src={
-                            rating >= i + 1 ? assets.star : assets.star_blank
-                          }
-                          alt="star"
-                          className="w-3 h-3"
-                        />
-                      ))}
+                      {[...Array(5)].map((_, i) => {
+                        const filled = rating >= i + 1;
+                        const half = rating >= i + 0.5 && rating < i + 1;
+                        const starWidth = filled ? "100%" : half ? "50%" : "0%";
+
+                        return (
+                          <div key={i} className="relative w-3 h-3">
+                            {/* Background star (empty) */}
+                            <img
+                              src={assets.star_blank}
+                              alt="star"
+                              className="absolute inset-0 w-full h-full"
+                            />
+                            {/* Foreground star (filled or half) */}
+                            {(filled || half) && (
+                              <div
+                                className="absolute inset-0 overflow-hidden"
+                                style={{ width: starWidth }}
+                              >
+                                <img
+                                  src={assets.star}
+                                  alt="star"
+                                  className="w-full h-full"
+                                />
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 </div>

@@ -217,7 +217,7 @@ const Cart = () => {
                 className="inline-flex items-center justify-center gap-3 bg-white border-2 border-gray-200 hover:border-blue-300 text-gray-700 hover:text-blue-600 font-semibold px-8 py-4 rounded-xl transition-all duration-300 shadow-sm hover:shadow-md"
               >
                 <FiStar className="w-5 h-5" />
-                View Top Picks
+                View Top Rated
               </Link>
             </div>
           </div>
@@ -289,7 +289,7 @@ const Cart = () => {
                           </h3>
                           <p className="text-gray-600 text-sm flex items-center gap-2">
                             <FiUsers className="w-4 h-4" />
-                            by Jubayer Ahmed
+                            by {course.educator?.username || "Instructor"}
                           </p>
                         </div>
 

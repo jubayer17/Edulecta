@@ -166,7 +166,7 @@ const CartDrawer = () => {
                             {course.courseTitle}
                           </h4>
                           <p className="text-xs text-gray-500 mb-2">
-                            by Jubayer Ahmed
+                            by {course.educator?.username || "Instructor"}
                           </p>
 
                           <div className="flex items-center justify-between">

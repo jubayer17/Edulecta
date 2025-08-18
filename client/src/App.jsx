@@ -50,8 +50,14 @@ const App = () => {
               <Route path="/course-list" element={<CoursesList />} />
               <Route path="/course-list/:input" element={<CoursesList />} />
               <Route path="/categories" element={<CategoriesPage />} />
-              <Route path="/browse-courses" element={<CategoriesWithCourses />} />
-              <Route path="/top-picks-courses" element={<TopPicksCoursesPage />} />
+              <Route
+                path="/browse-courses"
+                element={<CategoriesWithCourses />}
+              />
+              <Route
+                path="/top-picks-courses"
+                element={<TopPicksCoursesPage />}
+              />
               <Route
                 path="/newly-added-courses"
                 element={<NewlyAddedCoursesPage />}

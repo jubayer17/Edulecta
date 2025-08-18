@@ -6,27 +6,21 @@ import Footer from "../../components/student/Footer";
 
 const TopPicksCoursesPage = () => {
   const { navigate, allCourses, calculateRating } = useContext(AppContext);
-  const [sortOption, setSortOption] = useState("popular");
+  const [sortOption, setSortOption] = useState("rating");
   const [filteredCourses, setFilteredCourses] = useState([]);
 
-  // Get all courses sorted by popularity
+  // Get all courses sorted by rating (highest rated first)
   const topPicksCourses = useMemo(() => {
     if (!allCourses?.length) return [];
 
     // Filter published courses only
     const publishedCourses = allCourses.filter((course) => course.isPublished);
 
-    // Sort by popularity score (enrolled students * 0.6 + rating * 0.4)
+    // Sort by rating (highest first)
     return publishedCourses.sort((a, b) => {
       const aRating = calculateRating(a);
       const bRating = calculateRating(b);
-      const aEnrolled = a.enrolledStudents?.length || 0;
-      const bEnrolled = b.enrolledStudents?.length || 0;
-
-      const aScore = aEnrolled * 0.6 + aRating * 0.4;
-      const bScore = bEnrolled * 0.6 + bRating * 0.4;
-
-      return bScore - aScore;
+      return bRating - aRating; // Descending order (highest rating first)
     });
   }, [allCourses, calculateRating]);
 
@@ -46,12 +40,16 @@ const TopPicksCoursesPage = () => {
       case "priceHigh":
         tempCourses.sort((a, b) => b.coursePrice - a.coursePrice);
         break;
-      case "rating":
-        tempCourses.sort((a, b) => calculateRating(b) - calculateRating(a));
-        break;
       case "popular":
+        tempCourses.sort((a, b) => {
+          const aEnrolled = a.enrolledStudents?.length || 0;
+          const bEnrolled = b.enrolledStudents?.length || 0;
+          return bEnrolled - aEnrolled; // Most enrolled first
+        });
+        break;
+      case "rating":
       default:
-        // Already sorted by popularity
+        // Already sorted by rating
         break;
     }
 
@@ -70,7 +68,7 @@ const TopPicksCoursesPage = () => {
                   <FaTrophy className="text-white text-xl md:text-2xl" />
                 </div>
                 <h1 className="text-2xl md:text-3xl font-bold text-gray-900">
-                  Top Picks Courses
+                  Top Rated Courses
                 </h1>
               </div>
               <nav className="text-gray-500 text-sm space-x-2">
@@ -82,7 +80,7 @@ const TopPicksCoursesPage = () => {
                   Home
                 </span>
                 <span>/</span>
-                <span className="font-semibold text-gray-700">Top Picks</span>
+                <span className="font-semibold text-gray-700">Top Rated</span>
               </nav>
             </div>
 
@@ -92,8 +90,8 @@ const TopPicksCoursesPage = () => {
                 onChange={(e) => setSortOption(e.target.value)}
                 className="w-full md:w-auto rounded-lg border border-gray-300 px-4 py-3 md:px-3 md:py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 focus:border-orange-400 bg-white shadow-sm"
               >
-                <option value="popular">Most Popular</option>
                 <option value="rating">Highest Rated</option>
+                <option value="popular">Most Enrolled</option>
                 <option value="newest">Newest</option>
                 <option value="priceLow">Price: Low to High</option>
                 <option value="priceHigh">Price: High to Low</option>
@@ -130,10 +128,10 @@ const TopPicksCoursesPage = () => {
               <div className="max-w-md mx-auto">
                 <FaTrophy className="text-6xl mx-auto mb-4 text-gray-300" />
                 <p className="text-lg md:text-xl mb-2">
-                  No top picks available yet
+                  No top rated courses available yet
                 </p>
                 <p className="text-sm md:text-base text-gray-500 leading-relaxed">
-                  Check back later for our most popular courses!
+                  Check back later for our highest rated courses!
                 </p>
                 <button
                   onClick={() => navigate("/course-list")}

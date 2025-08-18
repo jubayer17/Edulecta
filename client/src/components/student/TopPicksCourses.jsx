@@ -6,24 +6,20 @@ import { FaTrophy, FaArrowRight } from "react-icons/fa";
 const TopPicksCourses = () => {
   const { allCourses, navigate, calculateRating } = useContext(AppContext);
 
-  // Get top 4 courses based on enrolled students count and rating
+  // Get top 4 courses based on rating (highest rated first)
   const topPicksCourses = useMemo(() => {
     if (!allCourses?.length) return [];
 
     // Filter published courses only
     const publishedCourses = allCourses.filter((course) => course.isPublished);
 
-    // Sort by popularity score (enrolled students * 0.6 + rating * 0.4)
+    // Sort by rating (highest first)
     const sortedCourses = publishedCourses.sort((a, b) => {
       const aRating = calculateRating(a);
       const bRating = calculateRating(b);
-      const aEnrolled = a.enrolledStudents?.length || 0;
-      const bEnrolled = b.enrolledStudents?.length || 0;
 
-      const aScore = aEnrolled * 0.6 + aRating * 0.4;
-      const bScore = bEnrolled * 0.6 + bRating * 0.4;
-
-      return bScore - aScore;
+      // Sort by rating descending (highest rating first)
+      return bRating - aRating;
     });
 
     return sortedCourses.slice(0, 4);
@@ -43,10 +39,10 @@ const TopPicksCourses = () => {
           </div>
           <div>
             <h2 className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-900">
-              Top Picks
+              Top Rated
             </h2>
             <p className="text-gray-600 text-xs sm:text-sm md:text-base">
-              Most popular courses based on ratings and enrollments
+              Highest rated courses by our community
             </p>
           </div>
         </div>

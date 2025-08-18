@@ -14,10 +14,10 @@ export const getAllCourse = async (req, res) => {
 
     // Build query object
     let queryObject = { isPublished: true };
-    
+
     // Add category filter if provided
-    if (category && category.trim() !== '') {
-      queryObject.courseCategory = { $regex: new RegExp(category.trim(), 'i') };
+    if (category && category.trim() !== "") {
+      queryObject.courseCategory = { $regex: new RegExp(category.trim(), "i") };
     }
 
     // Get filtered courses
@@ -45,14 +45,14 @@ export const getAllCourse = async (req, res) => {
     if (!courses || courses.length === 0) {
       return res.status(404).json({
         success: false,
-        message: category 
+        message: category
           ? `No published courses found in "${category}" category`
           : "No published courses found",
       });
     }
 
     // Map courses to frontend expected format (keeping original field names for compatibility)
-    const mappedCourses = courses.map(course => ({
+    const mappedCourses = courses.map((course) => ({
       _id: course._id,
       courseTitle: course.courseTitle,
       courseDescription: course.courseDescription,
@@ -77,14 +77,14 @@ export const getAllCourse = async (req, res) => {
       category: course.courseCategory,
       lessons: course.courseContent || [],
       ratings: course.courseRatings || [],
-      enrollments: course.enrolledStudents || []
+      enrollments: course.enrolledStudents || [],
     }));
 
     return res.status(200).json({
       success: true,
       courses: mappedCourses,
       totalCourses: mappedCourses.length,
-      message: category 
+      message: category
         ? `Courses in "${category}" category fetched successfully`
         : "Courses fetched successfully",
     });

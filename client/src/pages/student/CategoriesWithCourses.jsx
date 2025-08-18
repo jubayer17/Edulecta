@@ -12,11 +12,11 @@ const CategoriesWithCourses = () => {
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Category Navigation Bar */}
-      <CategoryNavBar 
+      <CategoryNavBar
         onCategorySelect={handleCategorySelect}
         selectedCategory={selectedCategory}
       />
-      
+
       {/* Category Courses */}
       <CategoryCourses selectedCategory={selectedCategory} />
     </div>

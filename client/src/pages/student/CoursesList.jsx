@@ -17,7 +17,7 @@ const CoursesList = () => {
 
   // Get category from URL parameters
   const searchParams = new URLSearchParams(location.search);
-  const categoryFilter = searchParams.get('category');
+  const categoryFilter = searchParams.get("category");
 
   console.log("Current user is educator:", isEducator);
   console.log("Category filter from URL:", categoryFilter);
@@ -81,10 +81,17 @@ const CoursesList = () => {
 
     // Apply category filter if present
     if (categoryFilter) {
-      tempCourses = tempCourses.filter((course) =>
-        course.courseCategory && course.courseCategory.toLowerCase() === categoryFilter.toLowerCase()
+      tempCourses = tempCourses.filter(
+        (course) =>
+          course.courseCategory &&
+          course.courseCategory.toLowerCase() === categoryFilter.toLowerCase()
       );
-      console.log("After category filter:", tempCourses.length, "courses for category:", categoryFilter);
+      console.log(
+        "After category filter:",
+        tempCourses.length,
+        "courses for category:",
+        categoryFilter
+      );
     }
 
     // Apply sorting

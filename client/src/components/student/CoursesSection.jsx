@@ -7,10 +7,21 @@ import { AppContext } from "../../context/AppContext";
 const CoursesSection = () => {
   const { allCourses } = useContext(AppContext);
 
-  // Filter to show only published courses (first 4)
+  // Filter and sort to show most enrolled courses (first 4)
   const publishedCourses = useMemo(() => {
     if (!allCourses?.length) return [];
-    return allCourses.filter((course) => course.isPublished).slice(0, 4);
+
+    // Filter published courses and sort by most enrolled
+    const published = allCourses.filter((course) => course.isPublished);
+
+    // Sort by enrolled students count (highest first)
+    const sortedByEnrollment = published.sort((a, b) => {
+      const aEnrolled = a.enrolledStudents?.length || 0;
+      const bEnrolled = b.enrolledStudents?.length || 0;
+      return bEnrolled - aEnrolled; // Descending order (most enrolled first)
+    });
+
+    return sortedByEnrollment.slice(0, 4);
   }, [allCourses]);
 
   return (

@@ -12,6 +12,11 @@ const AddCourse = () => {
   const [imageFile, setImageFile] = useState(null);
   const [thumbnailPreview, setThumbnailPreview] = useState(null);
 
+  // Loading states for both upload methods
+  const [isJsonUploading, setIsJsonUploading] = useState(false);
+  const [isDetailedUploading, setIsDetailedUploading] = useState(false);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+
   // Detailed form states - FIXED: Added discount field and made courseOfferPrice optional
   const [courseData, setCourseData] = useState({
     courseTitle: "",
@@ -34,7 +39,7 @@ const AddCourse = () => {
   const quillRef = useRef(null);
   const editorRef = useRef(null);
 
-  const { backendUrl, getToken } = useContext(AppContext);
+  const { backendUrl, getToken, navigate } = useContext(AppContext);
 
   // Setting up the rich text editor for course descriptions
   useEffect(() => {
@@ -76,17 +81,17 @@ const AddCourse = () => {
         setCategoriesLoading(true);
         const response = await fetch(`${backendUrl}/api/category`);
         const data = await response.json();
-        
+
         if (data.success && data.categories) {
           // Extract category names from the API response
-          const categoryNames = data.categories.map(cat => cat.name);
+          const categoryNames = data.categories.map((cat) => cat.name);
           setCategories(categoryNames);
         } else {
           console.error("Failed to fetch categories:", data);
           // Fallback to default categories if API fails
           setCategories([
             "Web Development",
-            "Mobile Development", 
+            "Mobile Development",
             "Data Science",
             "Machine Learning",
             "Cybersecurity",
@@ -102,7 +107,7 @@ const AddCourse = () => {
         setCategories([
           "Web Development",
           "Mobile Development",
-          "Data Science", 
+          "Data Science",
           "Machine Learning",
           "Cybersecurity",
           "Programming Languages",
@@ -117,6 +122,18 @@ const AddCourse = () => {
 
     fetchCategories();
   }, [backendUrl]);
+
+  // Function to handle successful course creation
+  const handleCourseSuccess = (courseTitle) => {
+    setShowSuccessModal(true);
+
+    // After a short delay, redirect to my courses with hard reload
+    setTimeout(() => {
+      navigate("/educator/my-courses");
+      // Force a hard reload to ensure fresh data
+      window.location.reload();
+    }, 3000);
+  };
 
   // Function to calculate discount percentage from offer price
   const calculateDiscount = (originalPrice, offerPrice) => {
@@ -151,6 +168,8 @@ const AddCourse = () => {
     if (!imageFile)
       return alert("Please select an image file for course thumbnail");
 
+    setIsJsonUploading(true);
+
     try {
       const token = await getToken();
 
@@ -160,6 +179,7 @@ const AddCourse = () => {
       try {
         courseData = JSON.parse(jsonText);
       } catch {
+        setIsJsonUploading(false);
         return alert("Invalid JSON file");
       }
 
@@ -194,8 +214,15 @@ const AddCourse = () => {
       );
 
       if (response.data.success) {
-        alert("Course created successfully!");
         console.log("Created Course:", response.data);
+
+        // Reset form on success
+        setJsonFile(null);
+        setImageFile(null);
+        setThumbnailPreview(null);
+
+        // Show success modal and redirect
+        handleCourseSuccess(courseData.courseTitle || "Your course");
       } else {
         alert(
           "Failed to create course: " + (response.data.error || "Unknown error")
@@ -206,6 +233,8 @@ const AddCourse = () => {
       alert(
         `Error creating course: ${err.response?.data?.error || err.message}`
       );
+    } finally {
+      setIsJsonUploading(false);
     }
   };
 
@@ -406,6 +435,8 @@ const AddCourse = () => {
       }
     }
 
+    setIsDetailedUploading(true);
+
     // Use your original working submission logic
     try {
       const token = await getToken();
@@ -439,7 +470,6 @@ const AddCourse = () => {
       );
 
       if (response.data.success) {
-        alert("Course created successfully!");
         console.log("Created Course:", response.data);
 
         // Reset the form
@@ -458,6 +488,9 @@ const AddCourse = () => {
         if (quillRef.current) {
           quillRef.current.setText("");
         }
+
+        // Show success modal and redirect
+        handleCourseSuccess(submissionData.courseTitle || "Your course");
       } else {
         alert(
           "Failed to create course: " + (response.data.error || "Unknown error")
@@ -468,11 +501,136 @@ const AddCourse = () => {
       alert(
         `Error creating course: ${err.response?.data?.error || err.message}`
       );
+    } finally {
+      setIsDetailedUploading(false);
     }
   };
 
   return (
     <div className="min-h-screen flex flex-col items-start justify-between md:p-8 md:pt-0 p-4 pt-8 bg-gradient-to-br from-indigo-50/40 via-purple-50/30 to-pink-50/40">
+      {/* Loading Overlay for JSON Upload */}
+      {isJsonUploading && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-md w-full mx-4 text-center">
+            <div className="relative">
+              <div className="w-16 h-16 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin mx-auto mb-4"></div>
+              <div
+                className="absolute inset-0 w-16 h-16 border-4 border-transparent border-t-orange-400 rounded-full animate-spin mx-auto"
+                style={{
+                  animationDirection: "reverse",
+                  animationDuration: "0.8s",
+                }}
+              ></div>
+            </div>
+            <h3 className="text-xl font-bold text-gray-800 mb-2">
+              Uploading Course
+            </h3>
+            <p className="text-gray-600 mb-4">
+              Please wait while we process your JSON file and create your
+              course...
+            </p>
+            <div className="flex items-center justify-center gap-2">
+              <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce"></div>
+              <div
+                className="w-2 h-2 bg-blue-500 rounded-full animate-bounce"
+                style={{ animationDelay: "0.1s" }}
+              ></div>
+              <div
+                className="w-2 h-2 bg-blue-500 rounded-full animate-bounce"
+                style={{ animationDelay: "0.2s" }}
+              ></div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Loading Overlay for Detailed Form Upload */}
+      {isDetailedUploading && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-md w-full mx-4 text-center">
+            <div className="relative">
+              <div className="w-16 h-16 border-4 border-green-200 border-t-green-600 rounded-full animate-spin mx-auto mb-4"></div>
+              <div
+                className="absolute inset-0 w-16 h-16 border-4 border-transparent border-t-purple-400 rounded-full animate-spin mx-auto"
+                style={{
+                  animationDirection: "reverse",
+                  animationDuration: "0.8s",
+                }}
+              ></div>
+            </div>
+            <h3 className="text-xl font-bold text-gray-800 mb-2">
+              Creating Course
+            </h3>
+            <p className="text-gray-600 mb-4">
+              Please wait while we create your course with all the detailed
+              content...
+            </p>
+            <div className="flex items-center justify-center gap-2">
+              <div className="w-2 h-2 bg-green-500 rounded-full animate-bounce"></div>
+              <div
+                className="w-2 h-2 bg-green-500 rounded-full animate-bounce"
+                style={{ animationDelay: "0.1s" }}
+              ></div>
+              <div
+                className="w-2 h-2 bg-green-500 rounded-full animate-bounce"
+                style={{ animationDelay: "0.2s" }}
+              ></div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Success Modal */}
+      {showSuccessModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-md w-full mx-4 text-center">
+            {/* Success Animation */}
+            <div className="relative mb-6">
+              <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4 animate-bounce">
+                <svg
+                  className="w-10 h-10 text-green-600"
+                  fill="currentColor"
+                  viewBox="0 0 20 20"
+                >
+                  <path
+                    fillRule="evenodd"
+                    d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                    clipRule="evenodd"
+                  />
+                </svg>
+              </div>
+              <div className="absolute inset-0 w-20 h-20 bg-green-200 rounded-full mx-auto animate-ping opacity-30"></div>
+            </div>
+
+            {/* Success Message */}
+            <h3 className="text-2xl font-bold text-gray-800 mb-2">
+              🎉 Congratulations!
+            </h3>
+            <p className="text-gray-600 mb-6">
+              Your course has been created successfully! You will be redirected
+              to your courses page shortly.
+            </p>
+
+            {/* Loading dots */}
+            <div className="flex items-center justify-center gap-2 mb-4">
+              <div className="w-2 h-2 bg-green-500 rounded-full animate-bounce"></div>
+              <div
+                className="w-2 h-2 bg-green-500 rounded-full animate-bounce"
+                style={{ animationDelay: "0.1s" }}
+              ></div>
+              <div
+                className="w-2 h-2 bg-green-500 rounded-full animate-bounce"
+                style={{ animationDelay: "0.2s" }}
+              ></div>
+            </div>
+
+            <p className="text-sm text-gray-500">
+              Redirecting to My Courses...
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Main page header */}
       <div className="w-full mb-8">
         <div className="bg-white/80 backdrop-blur-md rounded-2xl shadow-lg border border-white/20 p-6">
@@ -524,9 +682,14 @@ const AddCourse = () => {
 
             <button
               onClick={handleCreateCourse}
-              className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition-colors"
+              disabled={isJsonUploading}
+              className={`px-6 py-3 rounded-lg font-semibold transition-all duration-200 ${
+                isJsonUploading
+                  ? "bg-gray-400 text-gray-200 cursor-not-allowed"
+                  : "bg-blue-600 text-white hover:bg-blue-700 transform hover:scale-105"
+              }`}
             >
-              Create Course (JSON Upload)
+              {isJsonUploading ? "Uploading..." : "Create Course (JSON Upload)"}
             </button>
           </div>
         </div>
@@ -960,9 +1123,16 @@ const AddCourse = () => {
                   </button>
                   <button
                     type="submit"
-                    className="px-6 py-2 bg-gradient-to-r from-orange-500 to-red-600 text-white rounded-lg hover:from-orange-600 hover:to-red-700 transition-all duration-200 font-semibold"
+                    disabled={isDetailedUploading}
+                    className={`px-6 py-3 rounded-lg font-semibold transition-all duration-200 ${
+                      isDetailedUploading
+                        ? "bg-gray-400 text-gray-200 cursor-not-allowed"
+                        : "bg-gradient-to-r from-orange-500 to-red-600 text-white hover:from-orange-600 hover:to-red-700 transform hover:scale-105"
+                    }`}
                   >
-                    Create Course (Detailed Form)
+                    {isDetailedUploading
+                      ? "Creating..."
+                      : "Create Course (Detailed Form)"}
                   </button>
                 </div>
               </div>

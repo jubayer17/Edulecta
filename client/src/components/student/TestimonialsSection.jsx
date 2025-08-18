@@ -87,23 +87,40 @@ const TestimonialsSection = () => {
               {/* Rating Section */}
               <div className="mb-6">
                 <div className="flex gap-1 mb-3">
-                  {[...Array(5)].map((_, i) => (
-                    <div
-                      key={i}
-                      className="transform transition-all duration-300 hover:scale-125"
-                      style={{ animationDelay: `${i * 100}ms` }}
-                    >
-                      <img
-                        src={
-                          i < Math.floor(value.rating)
-                            ? assets.star
-                            : assets.star_blank
-                        }
-                        alt="star"
-                        className="w-5 h-5"
-                      />
-                    </div>
-                  ))}
+                  {[...Array(5)].map((_, i) => {
+                    const filled = value.rating >= i + 1;
+                    const half =
+                      value.rating >= i + 0.5 && value.rating < i + 1;
+                    const starWidth = filled ? "100%" : half ? "50%" : "0%";
+
+                    return (
+                      <div
+                        key={i}
+                        className="transform transition-all duration-300 hover:scale-125 relative w-5 h-5"
+                        style={{ animationDelay: `${i * 100}ms` }}
+                      >
+                        {/* Background star (empty) */}
+                        <img
+                          src={assets.star_blank}
+                          alt="star"
+                          className="absolute inset-0 w-full h-full"
+                        />
+                        {/* Foreground star (filled or half) */}
+                        {(filled || half) && (
+                          <div
+                            className="absolute inset-0 overflow-hidden"
+                            style={{ width: starWidth }}
+                          >
+                            <img
+                              src={assets.star}
+                              alt="star"
+                              className="w-full h-full"
+                            />
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
 
                 {/* Quote */}
