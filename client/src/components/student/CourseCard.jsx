@@ -1,8 +1,8 @@
 import React, { useContext } from "react";
 import { AppContext } from "../../context/AppContext";
-import { assets } from "../../assets/assets";
 import { Link } from "react-router-dom";
 import { FiShoppingCart, FiHeart } from "react-icons/fi";
+import { FaStar, FaStarHalfAlt, FaRegStar } from "react-icons/fa";
 import { toast } from "react-toastify";
 
 const CourseCard = ({ course }) => {
@@ -193,36 +193,36 @@ const CourseCard = ({ course }) => {
           {/* Rating and enrollment section */}
           <div className="flex items-center justify-between text-xs sm:text-sm mb-2">
             <div className="flex items-center gap-1">
-              <span className="text-yellow-600 font-semibold">{rating}</span>
+              <span className="text-yellow-600 font-semibold">
+                {rating.toFixed(1)}
+              </span>
               <div className="flex items-center gap-0.5">
-                {[...Array(5)].map((_, i) => {
-                  const filled = rating >= i + 1;
-                  const half = rating >= i + 0.5 && rating < i + 1;
-                  const starWidth = filled ? "100%" : half ? "50%" : "0%";
-
-                  return (
-                    <div key={i} className="relative w-3 h-3 sm:w-4 sm:h-4">
-                      {/* Background star (empty) */}
-                      <img
-                        src={assets.star_blank}
-                        alt="star"
-                        className="absolute inset-0 w-full h-full"
+                {[1, 2, 3, 4, 5].map((star) => {
+                  if (rating >= star) {
+                    // Full star
+                    return (
+                      <FaStar
+                        key={star}
+                        className="w-3 h-3 sm:w-4 sm:h-4 text-yellow-400"
                       />
-                      {/* Foreground star (filled or half) */}
-                      {(filled || half) && (
-                        <div
-                          className="absolute inset-0 overflow-hidden"
-                          style={{ width: starWidth }}
-                        >
-                          <img
-                            src={assets.star}
-                            alt="star"
-                            className="w-full h-full"
-                          />
-                        </div>
-                      )}
-                    </div>
-                  );
+                    );
+                  } else if (rating >= star - 0.5) {
+                    // Half star
+                    return (
+                      <FaStarHalfAlt
+                        key={star}
+                        className="w-3 h-3 sm:w-4 sm:h-4 text-yellow-400"
+                      />
+                    );
+                  } else {
+                    // Empty star
+                    return (
+                      <FaRegStar
+                        key={star}
+                        className="w-3 h-3 sm:w-4 sm:h-4 text-gray-300"
+                      />
+                    );
+                  }
                 })}
               </div>
             </div>

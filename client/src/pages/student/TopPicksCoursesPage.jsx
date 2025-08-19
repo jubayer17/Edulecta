@@ -68,7 +68,7 @@ const TopPicksCoursesPage = () => {
                   <FaTrophy className="text-white text-xl md:text-2xl" />
                 </div>
                 <h1 className="text-2xl md:text-3xl font-bold text-gray-900">
-                  Top Rated Courses
+                  Top Picks Courses
                 </h1>
               </div>
               <nav className="text-gray-500 text-sm space-x-2">
@@ -80,7 +80,7 @@ const TopPicksCoursesPage = () => {
                   Home
                 </span>
                 <span>/</span>
-                <span className="font-semibold text-gray-700">Top Rated</span>
+                <span className="font-semibold text-gray-700">Top Picks</span>
               </nav>
             </div>
 
@@ -128,10 +128,10 @@ const TopPicksCoursesPage = () => {
               <div className="max-w-md mx-auto">
                 <FaTrophy className="text-6xl mx-auto mb-4 text-gray-300" />
                 <p className="text-lg md:text-xl mb-2">
-                  No top rated courses available yet
+                  No top picks available yet
                 </p>
                 <p className="text-sm md:text-base text-gray-500 leading-relaxed">
-                  Check back later for our highest rated courses!
+                  Check back later for our most popular courses!
                 </p>
                 <button
                   onClick={() => navigate("/course-list")}

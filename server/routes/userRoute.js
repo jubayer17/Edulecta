@@ -17,6 +17,9 @@ import {
   getPendingPurchasesCount,
   cleanupOldPurchases,
   debugUserPurchases,
+  addToWishlist,
+  removeFromWishlist,
+  getUserWishlist,
 } from "../controllers/userController.js";
 import connectDB from "../configs/mongodb.js";
 
@@ -37,6 +40,11 @@ userRouter.post("/retry-payment/:purchaseId", retryPayment);
 
 // Get user enrolled courses (protected route)
 userRouter.get("/enrolled-courses", GetUserEnrolledCourses);
+
+// Wishlist routes (protected)
+userRouter.post("/add-to-wishlist", addToWishlist);
+userRouter.post("/remove-from-wishlist", removeFromWishlist);
+userRouter.get("/wishlist", getUserWishlist);
 
 // Get pending purchases count (protected route)
 userRouter.get("/pending-purchases-count", getPendingPurchasesCount);

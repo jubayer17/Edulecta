@@ -124,10 +124,10 @@ const Cart = () => {
   };
 
   return (
-    <div className="pb-20 md:pb-0 bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 min-h-screen pt-20">
+    <div className="pb-20 md:pb-0 bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 min-h-screen">
       {/* Header Section - Enhanced */}
       <div className="bg-white shadow-sm border-b border-gray-100">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <div className="max-w-7xl mx-auto px-1 sm:px-2 lg:px-3 py-2">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
               <button
@@ -137,13 +137,13 @@ const Cart = () => {
                 <FiArrowLeft className="w-5 h-5 text-gray-600 group-hover:-translate-x-1 transition-transform" />
               </button>
               <div>
-                <h1 className="text-3xl md:text-4xl font-bold text-gray-900 flex items-center gap-3">
-                  <div className="p-2 bg-blue-100 rounded-full">
-                    <FiShoppingBag className="text-blue-600 w-8 h-8" />
+                <h1 className="text-xl md:text-2xl font-bold text-gray-900 flex items-center gap-2">
+                  <div className="p-1.5 bg-blue-100 rounded-full">
+                    <FiShoppingBag className="text-blue-600 w-5 h-5" />
                   </div>
                   Shopping Cart
                 </h1>
-                <p className="text-gray-600 text-sm md:text-base mt-1">
+                <p className="text-gray-600 text-xs md:text-sm mt-1">
                   {cartItems.length}{" "}
                   {cartItems.length === 1 ? "course" : "courses"} ready for
                   checkout
@@ -155,10 +155,10 @@ const Cart = () => {
             {cartItems.length > 0 && (
               <div className="hidden md:flex items-center gap-3">
                 <div className="text-right">
-                  <p className="text-2xl font-bold text-blue-600">
+                  <p className="text-lg font-bold text-blue-600">
                     ${getCartTotal().toFixed(2)}
                   </p>
-                  <p className="text-sm text-gray-500">Total Amount</p>
+                  <p className="text-xs text-gray-500">Total Amount</p>
                 </div>
                 <button
                   onClick={handleCheckout}
@@ -185,26 +185,26 @@ const Cart = () => {
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="max-w-7xl mx-auto px-1 sm:px-2 lg:px-3 py-3">
         {cartItems.length === 0 ? (
           /* Empty Cart - Enhanced with animations */
-          <div className="text-center py-20">
-            <div className="relative mb-8">
-              <div className="w-32 h-32 mx-auto bg-gradient-to-br from-blue-100 to-indigo-200 rounded-full flex items-center justify-center animate-bounce">
-                <FiShoppingBag className="w-16 h-16 text-blue-500" />
+          <div className="text-center py-12">
+            <div className="relative mb-6">
+              <div className="w-24 h-24 mx-auto bg-gradient-to-br from-blue-100 to-indigo-200 rounded-full flex items-center justify-center animate-bounce">
+                <FiShoppingBag className="w-12 h-12 text-blue-500" />
               </div>
-              <div className="absolute -top-2 -right-2 w-8 h-8 bg-red-100 rounded-full flex items-center justify-center mx-auto">
-                <span className="text-red-500 font-bold">0</span>
+              <div className="absolute -top-2 -right-2 w-6 h-6 bg-red-100 rounded-full flex items-center justify-center mx-auto">
+                <span className="text-red-500 font-bold text-sm">0</span>
               </div>
             </div>
-            <h3 className="text-3xl font-bold text-gray-900 mb-4">
+            <h3 className="text-xl font-bold text-gray-900 mb-3">
               Your cart is empty
             </h3>
-            <p className="text-gray-500 mb-8 max-w-md mx-auto leading-relaxed">
+            <p className="text-gray-500 mb-6 max-w-md mx-auto leading-relaxed text-sm">
               Discover our amazing collection of courses and start building your
               skills today. Your learning journey is just one click away!
             </p>
-            <div className="flex flex-col sm:flex-row gap-4 justify-center">
+            <div className="flex flex-col sm:flex-row gap-3 justify-center">
               <Link
                 to="/course-list"
                 className="inline-flex items-center justify-center gap-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-semibold px-8 py-4 rounded-xl transition-all duration-300 transform hover:scale-105 shadow-lg"
@@ -222,12 +222,12 @@ const Cart = () => {
             </div>
           </div>
         ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* Cart Items - Enhanced layout */}
-            <div className="lg:col-span-2 space-y-6">
+            <div className="lg:col-span-2 space-y-4">
               {/* Cart Header with actions */}
-              <div className="flex items-center justify-between bg-white rounded-xl p-4 shadow-sm">
-                <h2 className="text-xl font-bold text-gray-900">
+              <div className="flex items-center justify-between bg-white rounded-xl p-3 shadow-sm">
+                <h2 className="text-lg font-bold text-gray-900">
                   Cart Items ({cartItems.length})
                 </h2>
                 {cartItems.length > 1 && (
@@ -253,14 +253,14 @@ const Cart = () => {
                 return (
                   <div
                     key={course._id}
-                    className={`bg-white rounded-2xl shadow-md hover:shadow-xl transition-all duration-300 p-6 border border-gray-100 ${
+                    className={`bg-white rounded-2xl shadow-md hover:shadow-xl transition-all duration-300 p-4 border border-gray-100 ${
                       isRemoving
                         ? "scale-95 opacity-50"
                         : "scale-100 opacity-100"
                     }`}
                     style={{ animationDelay: `${index * 100}ms` }}
                   >
-                    <div className="flex flex-col sm:flex-row gap-6">
+                    <div className="flex flex-col sm:flex-row gap-4">
                       {/* Course Image - Enhanced */}
                       <div className="relative w-full sm:w-40 h-24 sm:h-28 rounded-xl overflow-hidden bg-gray-100 flex-shrink-0 group">
                         <img
@@ -282,13 +282,13 @@ const Cart = () => {
                       </div>
 
                       {/* Course Info - Enhanced */}
-                      <div className="flex-grow space-y-3">
+                      <div className="flex-grow space-y-2">
                         <div>
-                          <h3 className="font-bold text-gray-900 text-lg mb-2 line-clamp-2 hover:text-blue-600 transition-colors">
+                          <h3 className="font-bold text-gray-900 text-base mb-1 line-clamp-2 hover:text-blue-600 transition-colors">
                             {course.courseTitle}
                           </h3>
-                          <p className="text-gray-600 text-sm flex items-center gap-2">
-                            <FiUsers className="w-4 h-4" />
+                          <p className="text-gray-600 text-xs flex items-center gap-2">
+                            <FiUsers className="w-3 h-3" />
                             by {course.educator?.username || "Instructor"}
                           </p>
                         </div>

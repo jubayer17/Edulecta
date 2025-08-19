@@ -10,6 +10,7 @@ import NewlyAddedCoursesPage from "./pages/student/NewlyAddedCoursesPage";
 import SubscriptionPlansPage from "./pages/student/SubscriptionPlansPage";
 import MyEnrollments from "./pages/student/MyEnrollments.jsx";
 import PendingPurchases from "./pages/student/PendingPurchases.jsx";
+import Wishlist from "./pages/student/Wishlist.jsx";
 import Cart from "./pages/student/Cart.jsx";
 import Player from "./pages/student/Player";
 import Loading from "./components/student/Loading";
@@ -68,6 +69,7 @@ const App = () => {
               />
               <Route path="/my-enrollments" element={<MyEnrollments />} />
               <Route path="/pending-purchases" element={<PendingPurchases />} />
+              <Route path="/wishlist" element={<Wishlist />} />
               <Route path="/cart" element={<Cart />} />
               <Route path="/course/:id" element={<CourseDetails />} />
               <Route path="/player/:courseId" element={<Player />} />

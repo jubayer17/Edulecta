@@ -1,12 +1,13 @@
-import React, { useContext, useEffect, useState } from "react";
+import React, { useContext, useEffect, useState, useCallback } from "react";
 import { useParams } from "react-router-dom";
 import { AppContext } from "../../context/AppContext";
 import Footer from "../../components/student/Footer";
 import Loading from "../../components/student/Loading";
 import { assets } from "../../assets/assets";
 import YouTube from "react-youtube";
-import axios, { all } from "axios";
+import axios from "axios";
 import { toast } from "react-toastify";
+import { FaStar, FaStarHalfAlt, FaRegStar } from "react-icons/fa";
 
 const CourseDetails = () => {
   const { id } = useParams();
@@ -25,6 +26,8 @@ const CourseDetails = () => {
   const [playerData, setPlayerData] = useState(null);
   const [isAlreadyEnrolled, setIsAlreadyEnrolled] = useState(false);
   const [isPendingPurchase, setIsPendingPurchase] = useState(false);
+  const [isInWishlist, setIsInWishlist] = useState(false);
+  const [wishlistLoading, setWishlistLoading] = useState(false);
   const [playerRef, setPlayerRef] = useState(null);
   const [expandedChapters, setExpandedChapters] = useState({
     0: true, // First chapter open by default
@@ -139,6 +142,164 @@ const CourseDetails = () => {
     }
   };
 
+  // Wishlist functions
+  const checkWishlistStatus = useCallback(async () => {
+    try {
+      if (!userData || !courseData) return;
+
+      const token = await getToken();
+      if (!token) return;
+
+      const { data } = await axios.get(`${backendUrl}/api/user/wishlist`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (data.success) {
+        console.log("Wishlist data:", data.wishlist); // Debug log
+        const isInWishlist = data.wishlist.some((item) => {
+          // Check if item and item.course exist
+          if (!item || !item.course) {
+            console.warn("Invalid wishlist item:", item);
+            return false;
+          }
+          // Handle both populated and non-populated course data
+          const courseId =
+            typeof item.course === "string" ? item.course : item.course._id;
+          return courseId === courseData._id;
+        });
+        setIsInWishlist(isInWishlist);
+      }
+    } catch (error) {
+      console.error("Error checking wishlist status:", error);
+    }
+  }, [userData, courseData, getToken, backendUrl]);
+
+  const addToWishlist = async () => {
+    try {
+      if (!userData) {
+        toast.warn("Please login to add courses to wishlist");
+        return;
+      }
+
+      if (!courseData || !courseData._id) {
+        toast.error("Course data is not available");
+        console.error("Course data missing:", courseData);
+        return;
+      }
+
+      console.log("🔍 Adding to wishlist - courseData:", courseData);
+      console.log("🔍 Course ID:", courseData._id);
+
+      setWishlistLoading(true);
+      const token = await getToken();
+
+      if (!token) {
+        toast.error("Authentication token not available");
+        return;
+      }
+
+      console.log("📡 Sending request to add to wishlist");
+
+      const { data } = await axios.post(
+        `${backendUrl}/api/user/add-to-wishlist`,
+        { courseId: courseData._id },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      console.log("📥 Response:", data);
+
+      if (data.success) {
+        setIsInWishlist(true);
+        toast.success("Course added to wishlist!");
+      } else {
+        toast.error(data.error || "Failed to add to wishlist");
+      }
+    } catch (error) {
+      console.error("Error adding to wishlist:", error);
+      if (error.response) {
+        console.error("Error response:", error.response.data);
+        toast.error(error.response.data.error || "Failed to add to wishlist");
+      } else {
+        toast.error("Failed to add to wishlist");
+      }
+    } finally {
+      setWishlistLoading(false);
+    }
+  };
+
+  const removeFromWishlist = async () => {
+    try {
+      if (!userData) {
+        toast.warn("Please login to manage wishlist");
+        return;
+      }
+
+      if (!courseData || !courseData._id) {
+        toast.error("Course data is not available");
+        console.error("Course data missing:", courseData);
+        return;
+      }
+
+      console.log("🗑️ Removing from wishlist - courseData:", courseData);
+      console.log("🗑️ Course ID:", courseData._id);
+
+      setWishlistLoading(true);
+      const token = await getToken();
+
+      if (!token) {
+        toast.error("Authentication token not available");
+        return;
+      }
+
+      console.log("📡 Sending request to remove from wishlist");
+
+      const { data } = await axios.delete(
+        `${backendUrl}/api/user/remove-from-wishlist`,
+        {
+          data: { courseId: courseData._id },
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      console.log("📥 Response:", data);
+
+      if (data.success) {
+        setIsInWishlist(false);
+        toast.success("Course removed from wishlist!");
+      } else {
+        toast.error(data.error || "Failed to remove from wishlist");
+      }
+    } catch (error) {
+      console.error("Error removing from wishlist:", error);
+      if (error.response) {
+        console.error("Error response:", error.response.data);
+        toast.error(
+          error.response.data.error || "Failed to remove from wishlist"
+        );
+      } else {
+        toast.error("Failed to remove from wishlist");
+      }
+    } finally {
+      setWishlistLoading(false);
+    }
+  };
+
+  const handleWishlistToggle = () => {
+    if (isInWishlist) {
+      removeFromWishlist();
+    } else {
+      addToWishlist();
+    }
+  };
+
   useEffect(() => {
     const found = allCourses.find((c) => c._id === id);
     setCourseData(found || null);
@@ -148,8 +309,10 @@ const CourseDetails = () => {
     if (userData && courseData) {
       const isEnrolled = userData.enrolledCourses.includes(courseData._id);
       setIsAlreadyEnrolled(isEnrolled);
+      // Check wishlist status when course data or user data changes
+      checkWishlistStatus();
     }
-  }, [userData, courseData]);
+  }, [userData, courseData, checkWishlistStatus]);
 
   if (!courseData) return <Loading />;
 
@@ -228,37 +391,35 @@ const CourseDetails = () => {
             <div className="flex items-center gap-4 mb-3">
               <div className="flex items-center gap-2">
                 <span className="text-2xl font-bold text-yellow-500">
-                  {rating}
+                  {rating.toFixed(1)}
                 </span>
                 <div className="flex items-center">
-                  {[...Array(5)].map((_, i) => {
-                    const filled = rating >= i + 1;
-                    const half = rating >= i + 0.5 && rating < i + 1;
-                    const starWidth = filled ? "100%" : half ? "50%" : "0%";
-
-                    return (
-                      <div key={i} className="relative w-5 h-5">
-                        {/* Background star (empty) */}
-                        <img
-                          src={assets.star_blank}
-                          alt="star"
-                          className="absolute inset-0 w-full h-full"
+                  {[1, 2, 3, 4, 5].map((star) => {
+                    if (rating >= star) {
+                      // Full star
+                      return (
+                        <FaStar
+                          key={star}
+                          className="w-5 h-5 text-yellow-400"
                         />
-                        {/* Foreground star (filled or half) */}
-                        {(filled || half) && (
-                          <div
-                            className="absolute inset-0 overflow-hidden"
-                            style={{ width: starWidth }}
-                          >
-                            <img
-                              src={assets.star}
-                              alt="star"
-                              className="w-full h-full"
-                            />
-                          </div>
-                        )}
-                      </div>
-                    );
+                      );
+                    } else if (rating >= star - 0.5) {
+                      // Half star
+                      return (
+                        <FaStarHalfAlt
+                          key={star}
+                          className="w-5 h-5 text-yellow-400"
+                        />
+                      );
+                    } else {
+                      // Empty star
+                      return (
+                        <FaRegStar
+                          key={star}
+                          className="w-5 h-5 text-gray-300"
+                        />
+                      );
+                    }
                   })}
                 </div>
               </div>
@@ -633,37 +794,35 @@ const CourseDetails = () => {
                   <span className="text-gray-600">Rating:</span>
                   <div className="flex items-center gap-1">
                     <span className="font-semibold text-gray-800">
-                      {rating}
+                      {rating.toFixed(1)}
                     </span>
                     <div className="flex">
-                      {[...Array(5)].map((_, i) => {
-                        const filled = rating >= i + 1;
-                        const half = rating >= i + 0.5 && rating < i + 1;
-                        const starWidth = filled ? "100%" : half ? "50%" : "0%";
-
-                        return (
-                          <div key={i} className="relative w-3 h-3">
-                            {/* Background star (empty) */}
-                            <img
-                              src={assets.star_blank}
-                              alt="star"
-                              className="absolute inset-0 w-full h-full"
+                      {[1, 2, 3, 4, 5].map((star) => {
+                        if (rating >= star) {
+                          // Full star
+                          return (
+                            <FaStar
+                              key={star}
+                              className="w-3 h-3 text-yellow-400"
                             />
-                            {/* Foreground star (filled or half) */}
-                            {(filled || half) && (
-                              <div
-                                className="absolute inset-0 overflow-hidden"
-                                style={{ width: starWidth }}
-                              >
-                                <img
-                                  src={assets.star}
-                                  alt="star"
-                                  className="w-full h-full"
-                                />
-                              </div>
-                            )}
-                          </div>
-                        );
+                          );
+                        } else if (rating >= star - 0.5) {
+                          // Half star
+                          return (
+                            <FaStarHalfAlt
+                              key={star}
+                              className="w-3 h-3 text-yellow-400"
+                            />
+                          );
+                        } else {
+                          // Empty star
+                          return (
+                            <FaRegStar
+                              key={star}
+                              className="w-3 h-3 text-gray-300"
+                            />
+                          );
+                        }
                       })}
                     </div>
                   </div>
@@ -693,8 +852,31 @@ const CourseDetails = () => {
                 </button>
 
                 <div className="grid grid-cols-2 gap-3 md:flex md:flex-col md:space-y-3 md:gap-0">
-                  <button className="cursor-pointer w-full border-2 border-blue-600 text-blue-600 hover:bg-blue-600 hover:text-white font-semibold py-2 md:py-3 px-4 md:px-6 rounded-xl transition-all duration-300 hover:shadow-lg text-sm md:text-base">
-                    Add to Wishlist
+                  <button
+                    onClick={handleWishlistToggle}
+                    disabled={wishlistLoading}
+                    className={`cursor-pointer w-full border-2 font-semibold py-2 md:py-3 px-4 md:px-6 rounded-xl transition-all duration-300 hover:shadow-lg text-sm md:text-base flex items-center justify-center gap-2 ${
+                      isInWishlist
+                        ? "border-red-500 text-red-500 hover:bg-red-500 hover:text-white"
+                        : "border-blue-600 text-blue-600 hover:bg-blue-600 hover:text-white"
+                    } ${
+                      wishlistLoading ? "opacity-50 cursor-not-allowed" : ""
+                    }`}
+                  >
+                    {wishlistLoading ? (
+                      <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin"></div>
+                    ) : (
+                      <>
+                        <span
+                          className={`w-4 h-4 ${isInWishlist ? "❤️" : "🤍"}`}
+                        >
+                          {isInWishlist ? "❤️" : "🤍"}
+                        </span>
+                        {isInWishlist
+                          ? "Remove from Wishlist"
+                          : "Add to Wishlist"}
+                      </>
+                    )}
                   </button>
                   <button className="cursor-pointer w-full bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-2 md:py-3 px-4 md:px-6 rounded-xl transition-all duration-300 text-sm md:text-base">
                     Share Course

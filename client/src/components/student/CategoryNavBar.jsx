@@ -79,7 +79,7 @@ const CategoryNavBar = ({ onCategorySelect, selectedCategory }) => {
 
   if (loading) {
     return (
-      <div className="w-full bg-white/95 backdrop-blur-md border-b border-gray-200/60 shadow-lg">
+      <div className="w-full bg-white border-b border-gray-200 shadow-sm">
         <div className="max-w-full mx-auto px-4 py-2">
           <div className="flex items-center gap-3">
             {[...Array(8)].map((_, index) => (
@@ -112,7 +112,7 @@ const CategoryNavBar = ({ onCategorySelect, selectedCategory }) => {
 
   if (error) {
     return (
-      <div className="w-full bg-white/95 backdrop-blur-md border-b border-gray-200/60 shadow-lg">
+      <div className="w-full bg-white border-b border-gray-200 shadow-sm">
         <div className="max-w-full mx-auto px-4 py-2">
           <div className="text-center text-red-600 text-sm">{error}</div>
         </div>
@@ -121,14 +121,14 @@ const CategoryNavBar = ({ onCategorySelect, selectedCategory }) => {
   }
 
   return (
-    <div className="w-full bg-white/95 backdrop-blur-md border-b border-gray-200/60 shadow-lg">
-      <div className="max-w-full mx-auto px-4 py-2 pt-6 relative">
+    <div className="w-full bg-white border-b border-gray-200 shadow-sm">
+      <div className="max-w-full mx-auto px-4 py-2 relative">
         <div className="flex items-center">
           {/* Left Scroll Button */}
           {showLeftScroll && (
             <button
               onClick={() => scroll("left")}
-              className="absolute left-2 top-8 z-10 p-2 bg-white/95 backdrop-blur-sm rounded-full shadow-lg border border-gray-200 hover:bg-gray-50 transition-colors"
+              className="absolute left-2 top-1/2 -translate-y-1/2 z-10 p-2 bg-white/95 backdrop-blur-sm rounded-full shadow-lg border border-gray-200 hover:bg-gray-50 transition-colors"
             >
               <FiChevronLeft className="w-4 h-4 text-gray-600" />
             </button>
@@ -178,7 +178,7 @@ const CategoryNavBar = ({ onCategorySelect, selectedCategory }) => {
           {showRightScroll && (
             <button
               onClick={() => scroll("right")}
-              className="absolute right-2 top-8 z-10 p-2 bg-white/95 backdrop-blur-sm rounded-full shadow-lg border border-gray-200 hover:bg-gray-50 transition-colors"
+              className="absolute right-2 top-1/2 -translate-y-1/2 z-10 p-2 bg-white/95 backdrop-blur-sm rounded-full shadow-lg border border-gray-200 hover:bg-gray-50 transition-colors"
             >
               <FiChevronRight className="w-4 h-4 text-gray-600" />
             </button>

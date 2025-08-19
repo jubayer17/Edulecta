@@ -8,33 +8,40 @@ const CategoryNavWrapper = ({ children }) => {
   const location = useLocation();
   const navigate = useNavigate();
 
-  // Show category nav on specific pages but handle each differently
-  // Exclude educator routes from showing category nav
-  const showCategoryNav =
-    !location.pathname.startsWith("/educator") &&
-    ([
-      "/",
-      "/course-list",
-      "/top-picks-courses",
-      "/newly-added-courses",
-    ].includes(location.pathname) ||
-      location.pathname.startsWith("/course-list/"));
+  // Show category nav on all student pages except educator/dashboard sections
+  const showCategoryNav = !location.pathname.startsWith("/educator");
 
-  // Show filtered courses on non-home pages when category is selected
+  // Show filtered courses on course listing pages when category is selected
   const showFilteredCourses =
-    selectedCategory !== null && location.pathname !== "/";
+    selectedCategory !== null && 
+    (location.pathname === "/course-list" || 
+     location.pathname === "/top-picks-courses" || 
+     location.pathname === "/newly-added-courses" ||
+     location.pathname.startsWith("/course-list/"));
 
   const handleCategorySelect = (category) => {
-    if (location.pathname === "/") {
-      // On home page, navigate to course list with category filter
+    if (location.pathname === "/" || 
+        location.pathname === "/categories" || 
+        location.pathname === "/browse-courses") {
+      // On home page and category pages, navigate to course list with category filter
       if (category) {
         navigate(`/course-list?category=${encodeURIComponent(category)}`);
       } else {
         navigate("/course-list");
       }
-    } else {
-      // On other pages, filter courses directly
+    } else if (location.pathname === "/course-list" || 
+               location.pathname === "/top-picks-courses" || 
+               location.pathname === "/newly-added-courses" ||
+               location.pathname.startsWith("/course-list/")) {
+      // On course listing pages, filter courses directly
       setSelectedCategory(category);
+    } else {
+      // On other pages (wishlist, cart, etc.), just navigate to course list
+      if (category) {
+        navigate(`/course-list?category=${encodeURIComponent(category)}`);
+      } else {
+        navigate("/course-list");
+      }
     }
   };
 
@@ -46,17 +53,15 @@ const CategoryNavWrapper = ({ children }) => {
     <>
       {/* Add top padding to account for fixed navbar */}
       <div className="pt-16 md:pt-20">
-        {/* Fixed Category Navigation Bar - Sticks below main navbar */}
-        <div className="fixed top-12 md:top-16 left-0 right-0 z-40 border-t border-gray-200">
-          <CategoryNavBar
-            onCategorySelect={handleCategorySelect}
-            selectedCategory={selectedCategory}
-          />
-        </div>
+        {/* Category Navigation Bar */}
+        <CategoryNavBar
+          onCategorySelect={handleCategorySelect}
+          selectedCategory={selectedCategory}
+        />
 
-        {/* Content Area with additional padding for category navbar */}
+        {/* Content Area */}
         <div
-          className={`pt-12 min-h-screen ${
+          className={`min-h-screen ${
             location.pathname === "/" ? "" : "bg-gray-50"
           }`}
         >

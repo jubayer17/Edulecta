@@ -39,6 +39,18 @@ const userSchema = new mongoose.Schema({
       ref: "Course",
     },
   ],
+  wishlist: [
+    {
+      course: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Course",
+      },
+      addedAt: {
+        type: Date,
+        default: Date.now,
+      },
+    },
+  ],
   createdAt: {
     type: Date,
     default: Date.now,

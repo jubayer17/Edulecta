@@ -39,7 +39,7 @@ const TopPicksCourses = () => {
           </div>
           <div>
             <h2 className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-900">
-              Top Rated
+              Top Picks
             </h2>
             <p className="text-gray-600 text-xs sm:text-sm md:text-base">
               Highest rated courses by our community

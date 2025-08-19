@@ -1653,3 +1653,256 @@ export const debugUserPurchases = async (req, res) => {
     });
   }
 };
+
+// Add course to wishlist
+export const addToWishlist = async (req, res) => {
+  try {
+    console.log("🔍 Add to wishlist request received");
+
+    const auth = req.auth();
+    const userId = auth?.userId;
+
+    console.log("🔍 Auth object:", auth);
+    console.log("🔍 User ID:", userId);
+
+    if (!userId) {
+      console.log("❌ No user ID found");
+      return res.status(401).json({
+        success: false,
+        error: "User authentication required",
+      });
+    }
+
+    const { courseId } = req.body;
+    console.log("📝 Request data:", { userId, courseId, body: req.body });
+    console.log("📝 CourseId type:", typeof courseId);
+    console.log("📝 CourseId value:", courseId);
+
+    if (!courseId) {
+      console.log("❌ No course ID provided");
+      return res.status(400).json({
+        success: false,
+        error: "Course ID is required",
+      });
+    }
+
+    // Validate ObjectId format for courseId
+    if (!mongoose.Types.ObjectId.isValid(courseId)) {
+      console.log("❌ Invalid course ID format:", courseId);
+      return res.status(400).json({
+        success: false,
+        error: "Invalid course ID format",
+      });
+    }
+
+    console.log("✅ CourseId validation passed");
+
+    await connectDB();
+
+    // Check if course exists
+    console.log("🔍 Looking for course with ObjectId:", courseId);
+    const courseObjectId = new mongoose.Types.ObjectId(courseId);
+    console.log("🔍 Converted to ObjectId:", courseObjectId);
+
+    const course = await Course.findById(courseObjectId);
+    if (!course) {
+      console.log("❌ Course not found:", courseId);
+      return res.status(404).json({
+        success: false,
+        error: "Course not found",
+      });
+    }
+
+    console.log("✅ Course found:", course.courseTitle);
+    console.log("✅ Course _id:", course._id);
+    console.log("✅ Course _id type:", typeof course._id);
+
+    // Find user and check if course is already in wishlist
+    console.log("🔍 Looking for user:", userId);
+    const user = await User.findById(userId);
+    if (!user) {
+      console.log("❌ User not found:", userId);
+      return res.status(404).json({
+        success: false,
+        error: "User not found",
+      });
+    }
+
+    console.log("✅ User found:", user.username || user.email);
+    console.log("🔍 Current wishlist:", user.wishlist);
+
+    // Check if course is already in wishlist
+    const isAlreadyInWishlist = user.wishlist.some(
+      (item) => item.course && item.course.toString() === course._id.toString()
+    );
+
+    if (isAlreadyInWishlist) {
+      console.log("⚠️ Course already in wishlist");
+      return res.status(400).json({
+        success: false,
+        error: "Course is already in your wishlist",
+      });
+    }
+
+    // Add course to wishlist using direct MongoDB update
+    console.log("➕ Adding course to wishlist using findByIdAndUpdate");
+    console.log("📝 User ID:", userId);
+    console.log("📝 Course ID:", course._id);
+
+    const updatedUser = await User.findByIdAndUpdate(
+      userId,
+      {
+        $push: {
+          wishlist: {
+            course: course._id,
+            addedAt: new Date(),
+          },
+        },
+      },
+      { new: true, runValidators: true }
+    );
+
+    if (!updatedUser) {
+      console.log("❌ Failed to update user wishlist");
+      return res.status(500).json({
+        success: false,
+        error: "Failed to update wishlist",
+      });
+    }
+
+    console.log("✅ Wishlist updated successfully using direct update");
+    console.log("📝 Updated wishlist:", updatedUser.wishlist);
+
+    return res.status(200).json({
+      success: true,
+      message: "Course added to wishlist successfully",
+    });
+  } catch (error) {
+    console.error("❌ Error adding to wishlist:", error.message);
+    console.error("❌ Error stack:", error.stack);
+    return res.status(500).json({
+      success: false,
+      error: "Internal server error",
+      message: error.message,
+    });
+  }
+};
+
+// Remove course from wishlist
+export const removeFromWishlist = async (req, res) => {
+  try {
+    const auth = req.auth();
+    const userId = auth?.userId;
+
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        error: "User authentication required",
+      });
+    }
+
+    const { courseId } = req.body;
+
+    if (!courseId) {
+      return res.status(400).json({
+        success: false,
+        error: "Course ID is required",
+      });
+    }
+
+    await connectDB();
+
+    // Find user and remove course from wishlist
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        error: "User not found",
+      });
+    }
+
+    // Remove course from wishlist
+    user.wishlist = user.wishlist.filter(
+      (item) => item.course && item.course.toString() !== courseId
+    );
+
+    await user.save();
+
+    return res.status(200).json({
+      success: true,
+      message: "Course removed from wishlist successfully",
+    });
+  } catch (error) {
+    console.error("❌ Error removing from wishlist:", error.message);
+    return res.status(500).json({
+      success: false,
+      error: "Internal server error",
+      message: error.message,
+    });
+  }
+};
+
+// Get user's wishlist
+export const getUserWishlist = async (req, res) => {
+  try {
+    const auth = req.auth();
+    const userId = auth?.userId;
+
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        error: "User authentication required",
+      });
+    }
+
+    await connectDB();
+
+    // Find user and populate wishlist courses
+    const user = await User.findById(userId).populate({
+      path: "wishlist.course",
+      model: "Course",
+      populate: {
+        path: "educator",
+        model: "User",
+        select: "username email",
+      },
+    });
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        error: "User not found",
+      });
+    }
+
+    // Filter out any wishlist items where the course no longer exists
+    const validWishlistItems = user.wishlist.filter(
+      (item) => item.course !== null
+    );
+
+    // Debug: Log the populated data
+    console.log("📝 User wishlist found:", validWishlistItems.length, "items");
+    if (validWishlistItems.length > 0) {
+      console.log(
+        "📝 First wishlist item:",
+        JSON.stringify(validWishlistItems[0], null, 2)
+      );
+      console.log(
+        "📝 First course educator:",
+        validWishlistItems[0].course?.educator
+      );
+    }
+
+    return res.status(200).json({
+      success: true,
+      wishlist: validWishlistItems,
+    });
+  } catch (error) {
+    console.error("❌ Error getting wishlist:", error.message);
+    return res.status(500).json({
+      success: false,
+      error: "Internal server error",
+      message: error.message,
+    });
+  }
+};

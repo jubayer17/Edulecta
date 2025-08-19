@@ -1,21 +1,18 @@
 /* eslint-disable no-unused-vars */
 import React, { useState, useEffect, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import { assets } from "../../assets/assets";
 import Quill from "quill";
 import axios from "axios";
 import { useContext } from "react";
 import { AppContext } from "./../../context/AppContext";
+import { FiCheck, FiLoader, FiUpload, FiBookOpen } from "react-icons/fi";
 
 const AddCourse = () => {
   // Your original working states
   const [jsonFile, setJsonFile] = useState(null);
   const [imageFile, setImageFile] = useState(null);
   const [thumbnailPreview, setThumbnailPreview] = useState(null);
-
-  // Loading states for both upload methods
-  const [isJsonUploading, setIsJsonUploading] = useState(false);
-  const [isDetailedUploading, setIsDetailedUploading] = useState(false);
-  const [showSuccessModal, setShowSuccessModal] = useState(false);
 
   // Detailed form states - FIXED: Added discount field and made courseOfferPrice optional
   const [courseData, setCourseData] = useState({
@@ -34,12 +31,18 @@ const AddCourse = () => {
   const [categories, setCategories] = useState([]);
   const [categoriesLoading, setCategoriesLoading] = useState(true);
 
+  // Loading and success states for course upload
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadSuccess, setUploadSuccess] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+
   const [detailedThumbnailPreview, setDetailedThumbnailPreview] =
     useState(null);
   const quillRef = useRef(null);
   const editorRef = useRef(null);
 
-  const { backendUrl, getToken, navigate } = useContext(AppContext);
+  const { backendUrl, getToken } = useContext(AppContext);
+  const navigate = useNavigate();
 
   // Setting up the rich text editor for course descriptions
   useEffect(() => {
@@ -123,18 +126,6 @@ const AddCourse = () => {
     fetchCategories();
   }, [backendUrl]);
 
-  // Function to handle successful course creation
-  const handleCourseSuccess = (courseTitle) => {
-    setShowSuccessModal(true);
-
-    // After a short delay, redirect to my courses with hard reload
-    setTimeout(() => {
-      navigate("/educator/my-courses");
-      // Force a hard reload to ensure fresh data
-      window.location.reload();
-    }, 3000);
-  };
-
   // Function to calculate discount percentage from offer price
   const calculateDiscount = (originalPrice, offerPrice) => {
     if (!originalPrice || !offerPrice) return 0;
@@ -168,20 +159,28 @@ const AddCourse = () => {
     if (!imageFile)
       return alert("Please select an image file for course thumbnail");
 
-    setIsJsonUploading(true);
+    // Start loading state with optimized progress
+    setIsUploading(true);
+    setUploadProgress(5);
 
     try {
       const token = await getToken();
+      setUploadProgress(15);
 
       // Read and parse JSON file
       const jsonText = await jsonFile.text();
+      setUploadProgress(25);
+
       let courseData;
       try {
         courseData = JSON.parse(jsonText);
       } catch {
-        setIsJsonUploading(false);
+        setIsUploading(false);
+        setUploadProgress(0);
         return alert("Invalid JSON file");
       }
+
+      setUploadProgress(35);
 
       // Ensure the JSON data has the discount field if it's missing
       if (
@@ -202,6 +201,8 @@ const AddCourse = () => {
       formData.append("courseData", JSON.stringify(courseData)); // must be a JSON string
       formData.append("image", imageFile); // must match upload.single("image")
 
+      setUploadProgress(45);
+
       // Send request (NO manual Content-Type)
       const response = await axios.post(
         `${backendUrl}/api/educator/add-course`,
@@ -210,31 +211,44 @@ const AddCourse = () => {
           headers: {
             Authorization: `Bearer ${token}`, // only add auth header
           },
+          onUploadProgress: (progressEvent) => {
+            const uploadPercent = Math.round(
+              (progressEvent.loaded * 50) / progressEvent.total + 45
+            );
+            setUploadProgress(Math.min(uploadPercent, 95));
+          },
         }
       );
 
+      setUploadProgress(100);
+
       if (response.data.success) {
+        // Show success state instead of alert
+        setUploadSuccess(true);
         console.log("Created Course:", response.data);
 
-        // Reset form on success
-        setJsonFile(null);
-        setImageFile(null);
-        setThumbnailPreview(null);
+        // Reset and redirect after success animation
+        setTimeout(() => {
+          setJsonFile(null);
+          setImageFile(null);
+          setThumbnailPreview(null);
 
-        // Show success modal and redirect
-        handleCourseSuccess(courseData.courseTitle || "Your course");
+          // Redirect to my-courses after 2 seconds with hard reload
+          setTimeout(() => {
+            window.location.href = "/educator/my-courses";
+          }, 2000);
+        }, 1000);
       } else {
-        alert(
-          "Failed to create course: " + (response.data.error || "Unknown error")
-        );
+        throw new Error(response.data.error || "Unknown error");
       }
     } catch (err) {
       console.error("Create course error:", err.response?.data || err.message);
       alert(
         `Error creating course: ${err.response?.data?.error || err.message}`
       );
-    } finally {
-      setIsJsonUploading(false);
+      setIsUploading(false);
+      setUploadProgress(0);
+      setUploadSuccess(false);
     }
   };
 
@@ -435,11 +449,14 @@ const AddCourse = () => {
       }
     }
 
-    setIsDetailedUploading(true);
+    // Start loading state with more realistic progress
+    setIsUploading(true);
+    setUploadProgress(5);
 
     // Use your original working submission logic
     try {
       const token = await getToken();
+      setUploadProgress(15);
 
       // FIXED: Prepare the course data with proper field mapping
       const submissionData = {
@@ -453,10 +470,14 @@ const AddCourse = () => {
           : undefined,
       };
 
+      setUploadProgress(25);
+
       // Prepare FormData using the detailed form data
       const formData = new FormData();
       formData.append("courseData", JSON.stringify(submissionData)); // must be a JSON string
       formData.append("image", courseData.courseThumbnail); // must match upload.single("image")
+
+      setUploadProgress(35);
 
       // Send request (NO manual Content-Type) - your original working code
       const response = await axios.post(
@@ -466,714 +487,719 @@ const AddCourse = () => {
           headers: {
             Authorization: `Bearer ${token}`, // only add auth header
           },
+          onUploadProgress: (progressEvent) => {
+            const uploadPercent = Math.round(
+              (progressEvent.loaded * 60) / progressEvent.total + 35
+            );
+            setUploadProgress(Math.min(uploadPercent, 95));
+          },
         }
       );
 
+      setUploadProgress(100);
+
       if (response.data.success) {
+        // Show success state
+        setUploadSuccess(true);
         console.log("Created Course:", response.data);
 
-        // Reset the form
-        setCourseData({
-          courseTitle: "",
-          courseDescription: "",
-          coursePrice: "",
-          courseOfferPrice: "",
-          discount: "",
-          courseCategory: "",
-          courseThumbnail: null,
-          courseContent: [],
-          isPublished: true,
-        });
-        setDetailedThumbnailPreview(null);
-        if (quillRef.current) {
-          quillRef.current.setText("");
-        }
+        // Reset the form after a delay
+        setTimeout(() => {
+          setCourseData({
+            courseTitle: "",
+            courseDescription: "",
+            coursePrice: "",
+            courseOfferPrice: "",
+            discount: "",
+            courseCategory: "",
+            courseThumbnail: null,
+            courseContent: [],
+            isPublished: true,
+          });
+          setDetailedThumbnailPreview(null);
+          if (quillRef.current) {
+            quillRef.current.setText("");
+          }
 
-        // Show success modal and redirect
-        handleCourseSuccess(submissionData.courseTitle || "Your course");
+          // Redirect to my-courses after 2 seconds with hard reload
+          setTimeout(() => {
+            window.location.href = "/educator/my-courses";
+          }, 2000);
+        }, 1000);
       } else {
-        alert(
-          "Failed to create course: " + (response.data.error || "Unknown error")
-        );
+        throw new Error(response.data.error || "Unknown error");
       }
     } catch (err) {
       console.error("Create course error:", err.response?.data || err.message);
       alert(
         `Error creating course: ${err.response?.data?.error || err.message}`
       );
-    } finally {
-      setIsDetailedUploading(false);
+      setIsUploading(false);
+      setUploadProgress(0);
+      setUploadSuccess(false);
     }
   };
 
   return (
-    <div className="min-h-screen flex flex-col items-start justify-between md:p-8 md:pt-0 p-4 pt-8 bg-gradient-to-br from-indigo-50/40 via-purple-50/30 to-pink-50/40">
-      {/* Loading Overlay for JSON Upload */}
-      {isJsonUploading && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-md w-full mx-4 text-center">
-            <div className="relative">
-              <div className="w-16 h-16 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin mx-auto mb-4"></div>
-              <div
-                className="absolute inset-0 w-16 h-16 border-4 border-transparent border-t-orange-400 rounded-full animate-spin mx-auto"
-                style={{
-                  animationDirection: "reverse",
-                  animationDuration: "0.8s",
-                }}
-              ></div>
-            </div>
-            <h3 className="text-xl font-bold text-gray-800 mb-2">
-              Uploading Course
-            </h3>
-            <p className="text-gray-600 mb-4">
-              Please wait while we process your JSON file and create your
-              course...
-            </p>
-            <div className="flex items-center justify-center gap-2">
-              <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce"></div>
-              <div
-                className="w-2 h-2 bg-blue-500 rounded-full animate-bounce"
-                style={{ animationDelay: "0.1s" }}
-              ></div>
-              <div
-                className="w-2 h-2 bg-blue-500 rounded-full animate-bounce"
-                style={{ animationDelay: "0.2s" }}
-              ></div>
-            </div>
+    <>
+      {/* Gorgeous Loading Overlay - Optimized with Blur Effect */}
+      {(isUploading || uploadSuccess) && (
+        <div className="fixed inset-0 bg-white/20 backdrop-blur-md z-50 flex items-center justify-center">
+          <div className="bg-white/95 backdrop-blur-lg rounded-2xl p-8 max-w-md w-full mx-4 text-center shadow-2xl border border-white/30">
+            {!uploadSuccess ? (
+              <>
+                {/* Enhanced Loading State */}
+                <div className="mb-8">
+                  <div className="relative mb-6">
+                    {/* Animated Spinning Loader with Glow */}
+                    <div className="animate-spin mx-auto">
+                      <FiLoader className="text-7xl text-blue-500 drop-shadow-lg" />
+                    </div>
+                    {/* Pulsing Ring Around Loader */}
+                    <div className="absolute inset-0 rounded-full border-4 border-blue-200 animate-pulse opacity-30"></div>
+                  </div>
+
+                  <h3 className="text-2xl font-bold mb-3 bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+                    Creating Your Course...
+                  </h3>
+                  <p className="text-gray-600 mb-6 text-lg">
+                    Please wait while we upload your content
+                  </p>
+
+                  {/* Enhanced Progress Bar with Animation */}
+                  <div className="w-full bg-gray-200 rounded-full h-4 mb-3 overflow-hidden shadow-inner">
+                    <div
+                      className="bg-gradient-to-r from-blue-500 via-purple-500 to-blue-600 h-4 rounded-full transition-all duration-700 ease-out relative"
+                      style={{ width: `${uploadProgress}%` }}
+                    >
+                      {/* Moving Shine Effect */}
+                      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent animate-pulse"></div>
+                    </div>
+                  </div>
+                  <div className="flex justify-between items-center mb-6">
+                    <p className="text-sm font-semibold text-gray-700">
+                      {uploadProgress}%
+                    </p>
+                    <p className="text-sm text-gray-500">
+                      {uploadProgress < 20
+                        ? "Initializing..."
+                        : uploadProgress < 40
+                        ? "Preparing data..."
+                        : uploadProgress < 65
+                        ? "Uploading files..."
+                        : uploadProgress < 85
+                        ? "Processing content..."
+                        : uploadProgress < 95
+                        ? "Finalizing upload..."
+                        : "Almost done..."}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Enhanced Upload Status with Icons */}
+                <div className="flex items-center justify-center space-x-3 text-gray-600 bg-gray-50/80 rounded-lg p-4">
+                  <div className="animate-bounce">
+                    <FiUpload className="text-xl text-blue-500" />
+                  </div>
+                  <span className="text-sm font-medium">
+                    {uploadProgress < 20
+                      ? "Starting upload process..."
+                      : uploadProgress < 40
+                      ? "Validating course information..."
+                      : uploadProgress < 65
+                      ? "Transferring files to server..."
+                      : uploadProgress < 85
+                      ? "Optimizing course content..."
+                      : uploadProgress < 95
+                      ? "Generating course metadata..."
+                      : "Completing final steps..."}
+                  </span>
+                </div>
+              </>
+            ) : (
+              <>
+                {/* Enhanced Success State */}
+                <div className="mb-8">
+                  {/* Success Icon with Animation */}
+                  <div className="relative mx-auto mb-6">
+                    <div className="mx-auto bg-gradient-to-r from-green-400 to-green-600 rounded-full p-6 w-24 h-24 flex items-center justify-center shadow-lg">
+                      <FiCheck className="text-5xl text-white animate-pulse" />
+                    </div>
+                    {/* Success Ring Animation */}
+                    <div className="absolute inset-0 rounded-full border-4 border-green-300 animate-ping opacity-30"></div>
+                  </div>
+
+                  <h3 className="text-2xl font-bold mb-3 bg-gradient-to-r from-green-600 to-emerald-600 bg-clip-text text-transparent">
+                    Course Created Successfully!
+                  </h3>
+                  <p className="text-gray-600 mb-6 text-lg">
+                    Your course has been published and is ready for students
+                  </p>
+
+                  {/* Success Stats */}
+                  <div className="bg-green-50/80 rounded-lg p-4 mb-6">
+                    <div className="flex items-center justify-center space-x-2 text-green-700">
+                      <FiBookOpen className="text-xl" />
+                      <span className="text-sm font-semibold">
+                        Course is now live!
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Enhanced Redirect Animation */}
+                  <div className="flex items-center justify-center space-x-3 text-blue-600">
+                    <div className="animate-spin">
+                      <FiLoader className="text-lg" />
+                    </div>
+                    <span className="text-sm font-medium animate-pulse">
+                      Redirecting to My Courses...
+                    </span>
+                  </div>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}
 
-      {/* Loading Overlay for Detailed Form Upload */}
-      {isDetailedUploading && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-md w-full mx-4 text-center">
-            <div className="relative">
-              <div className="w-16 h-16 border-4 border-green-200 border-t-green-600 rounded-full animate-spin mx-auto mb-4"></div>
-              <div
-                className="absolute inset-0 w-16 h-16 border-4 border-transparent border-t-purple-400 rounded-full animate-spin mx-auto"
-                style={{
-                  animationDirection: "reverse",
-                  animationDuration: "0.8s",
-                }}
-              ></div>
-            </div>
-            <h3 className="text-xl font-bold text-gray-800 mb-2">
-              Creating Course
-            </h3>
-            <p className="text-gray-600 mb-4">
-              Please wait while we create your course with all the detailed
-              content...
-            </p>
-            <div className="flex items-center justify-center gap-2">
-              <div className="w-2 h-2 bg-green-500 rounded-full animate-bounce"></div>
-              <div
-                className="w-2 h-2 bg-green-500 rounded-full animate-bounce"
-                style={{ animationDelay: "0.1s" }}
-              ></div>
-              <div
-                className="w-2 h-2 bg-green-500 rounded-full animate-bounce"
-                style={{ animationDelay: "0.2s" }}
-              ></div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Success Modal */}
-      {showSuccessModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-md w-full mx-4 text-center">
-            {/* Success Animation */}
-            <div className="relative mb-6">
-              <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4 animate-bounce">
-                <svg
-                  className="w-10 h-10 text-green-600"
-                  fill="currentColor"
-                  viewBox="0 0 20 20"
-                >
-                  <path
-                    fillRule="evenodd"
-                    d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
-                    clipRule="evenodd"
-                  />
-                </svg>
+      {/* Main Content */}
+      <div className="min-h-screen flex flex-col items-start justify-between md:p-8 md:pt-0 p-4 pt-8 bg-gradient-to-br from-indigo-50/40 via-purple-50/30 to-pink-50/40">
+        {/* Main page header */}
+        <div className="w-full mb-8">
+          <div className="bg-white/80 backdrop-blur-md rounded-2xl shadow-lg border border-white/20 p-6">
+            <div className="flex items-center justify-between mb-2">
+              <h1 className="text-3xl font-bold text-gray-800">
+                Add New Course
+              </h1>
+              <div className="bg-gradient-to-r from-orange-500 to-red-600 text-white px-4 py-2 rounded-full text-sm font-semibold">
+                Create Course
               </div>
-              <div className="absolute inset-0 w-20 h-20 bg-green-200 rounded-full mx-auto animate-ping opacity-30"></div>
             </div>
-
-            {/* Success Message */}
-            <h3 className="text-2xl font-bold text-gray-800 mb-2">
-              🎉 Congratulations!
-            </h3>
-            <p className="text-gray-600 mb-6">
-              Your course has been created successfully! You will be redirected
-              to your courses page shortly.
-            </p>
-
-            {/* Loading dots */}
-            <div className="flex items-center justify-center gap-2 mb-4">
-              <div className="w-2 h-2 bg-green-500 rounded-full animate-bounce"></div>
-              <div
-                className="w-2 h-2 bg-green-500 rounded-full animate-bounce"
-                style={{ animationDelay: "0.1s" }}
-              ></div>
-              <div
-                className="w-2 h-2 bg-green-500 rounded-full animate-bounce"
-                style={{ animationDelay: "0.2s" }}
-              ></div>
-            </div>
-
-            <p className="text-sm text-gray-500">
-              Redirecting to My Courses...
+            <p className="text-gray-600">
+              Create and publish a new course for your students
             </p>
           </div>
         </div>
-      )}
 
-      {/* Main page header */}
-      <div className="w-full mb-8">
-        <div className="bg-white/80 backdrop-blur-md rounded-2xl shadow-lg border border-white/20 p-6">
-          <div className="flex items-center justify-between mb-2">
-            <h1 className="text-3xl font-bold text-gray-800">Add New Course</h1>
-            <div className="bg-gradient-to-r from-orange-500 to-red-600 text-white px-4 py-2 rounded-full text-sm font-semibold">
-              Create Course
-            </div>
-          </div>
-          <p className="text-gray-600">
-            Create and publish a new course for your students
-          </p>
-        </div>
-      </div>
-
-      <div className="w-full flex-1 space-y-8">
-        {/* Your original working JSON upload section */}
-        <div className="bg-white/80 backdrop-blur-md rounded-2xl shadow-lg border border-white/20 overflow-hidden">
-          <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white p-4">
-            <h2 className="text-lg font-semibold">
-              Quick Upload (JSON + Image)
-            </h2>
-          </div>
-          <div className="p-6">
-            <div className="mb-4">
-              <label className="block mb-1 font-semibold">
-                Course JSON File:
-              </label>
-              <input type="file" accept=".json" onChange={handleJsonChange} />
-            </div>
-
-            <div className="mb-4">
-              <label className="block mb-1 font-semibold">
-                Course Thumbnail:
-              </label>
-              <input
-                type="file"
-                accept="image/*"
-                onChange={handleImageChange}
-              />
-              {thumbnailPreview && (
-                <img
-                  src={thumbnailPreview}
-                  alt="Thumbnail Preview"
-                  className="mt-2 w-32 h-32 object-cover rounded"
-                />
-              )}
-            </div>
-
-            <button
-              onClick={handleCreateCourse}
-              disabled={isJsonUploading}
-              className={`px-6 py-3 rounded-lg font-semibold transition-all duration-200 ${
-                isJsonUploading
-                  ? "bg-gray-400 text-gray-200 cursor-not-allowed"
-                  : "bg-blue-600 text-white hover:bg-blue-700 transform hover:scale-105"
-              }`}
-            >
-              {isJsonUploading ? "Uploading..." : "Create Course (JSON Upload)"}
-            </button>
-          </div>
-        </div>
-
-        {/* Detailed form section */}
-        <form onSubmit={handleSubmit} className="space-y-6">
+        <div className="w-full flex-1 space-y-8">
+          {/* Your original working JSON upload section */}
           <div className="bg-white/80 backdrop-blur-md rounded-2xl shadow-lg border border-white/20 overflow-hidden">
-            {/* Form section header */}
-            <div className="bg-gradient-to-r from-orange-600 to-red-600 text-white p-4">
+            <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white p-4">
               <h2 className="text-lg font-semibold">
-                Detailed Course Creation
+                Quick Upload (JSON + Image)
               </h2>
             </div>
+            <div className="p-6">
+              <div className="mb-4">
+                <label className="block mb-1 font-semibold">
+                  Course JSON File:
+                </label>
+                <input type="file" accept=".json" onChange={handleJsonChange} />
+              </div>
 
-            {/* All the form inputs go here */}
-            <div className="p-6 space-y-6">
-              {/* Basic course title input */}
-              <div>
-                <label
-                  htmlFor="courseTitle"
-                  className="block text-sm font-semibold text-gray-700 mb-2"
-                >
-                  Course Title <span className="text-red-500">*</span>
+              <div className="mb-4">
+                <label className="block mb-1 font-semibold">
+                  Course Thumbnail:
                 </label>
                 <input
-                  type="text"
-                  id="courseTitle"
-                  name="courseTitle"
-                  value={courseData.courseTitle}
-                  onChange={handleInputChange}
-                  placeholder="Enter course title"
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-all duration-200 bg-white/50 backdrop-blur-sm"
-                  required
+                  type="file"
+                  accept="image/*"
+                  onChange={handleImageChange}
                 />
+                {thumbnailPreview && (
+                  <img
+                    src={thumbnailPreview}
+                    alt="Thumbnail Preview"
+                    className="mt-2 w-32 h-32 object-cover rounded"
+                  />
+                )}
               </div>
 
-              {/* Dropdown to pick what kind of course this is */}
-              <div>
-                <label
-                  htmlFor="courseCategory"
-                  className="block text-sm font-semibold text-gray-700 mb-2"
-                >
-                  Course Category <span className="text-red-500">*</span>
-                </label>
-                <select
-                  id="courseCategory"
-                  name="courseCategory"
-                  value={courseData.courseCategory}
-                  onChange={handleInputChange}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-all duration-200 bg-white/50 backdrop-blur-sm"
-                  required
-                  disabled={categoriesLoading}
-                >
-                  {categoriesLoading ? (
-                    <option value="">Loading categories...</option>
-                  ) : (
-                    <>
-                      <option value="">Select a category</option>
-                      {categories.map((category, index) => (
-                        <option key={index} value={category}>
-                          {category}
-                        </option>
-                      ))}
-                    </>
-                  )}
-                </select>
+              <button
+                onClick={handleCreateCourse}
+                className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition-colors"
+              >
+                Create Course (JSON Upload)
+              </button>
+            </div>
+          </div>
+
+          {/* Detailed form section */}
+          <form onSubmit={handleSubmit} className="space-y-6">
+            <div className="bg-white/80 backdrop-blur-md rounded-2xl shadow-lg border border-white/20 overflow-hidden">
+              {/* Form section header */}
+              <div className="bg-gradient-to-r from-orange-600 to-red-600 text-white p-4">
+                <h2 className="text-lg font-semibold">
+                  Detailed Course Creation
+                </h2>
               </div>
 
-              {/* Rich text editor for detailed course description */}
-              <div>
-                <label
-                  htmlFor="courseDescription"
-                  className="block text-sm font-semibold text-gray-700 mb-2"
-                >
-                  Course Description <span className="text-red-500">*</span>
-                </label>
-                <div
-                  ref={editorRef}
-                  className="quill-editor bg-white/50 backdrop-blur-sm border border-gray-300 rounded-lg focus-within:ring-2 focus-within:ring-orange-500 focus-within:border-transparent transition-all duration-200"
-                  style={{ minHeight: "200px" }}
-                />
-              </div>
-
-              {/* Course pricing - regular price and optional discount price */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {/* All the form inputs go here */}
+              <div className="p-6 space-y-6">
+                {/* Basic course title input */}
                 <div>
                   <label
-                    htmlFor="coursePrice"
+                    htmlFor="courseTitle"
                     className="block text-sm font-semibold text-gray-700 mb-2"
                   >
-                    Course Price ($) <span className="text-red-500">*</span>
+                    Course Title <span className="text-red-500">*</span>
                   </label>
                   <input
-                    type="number"
-                    id="coursePrice"
-                    name="coursePrice"
-                    value={courseData.coursePrice}
+                    type="text"
+                    id="courseTitle"
+                    name="courseTitle"
+                    value={courseData.courseTitle}
                     onChange={handleInputChange}
-                    placeholder="99.99"
-                    min="0"
-                    step="0.01"
+                    placeholder="Enter course title"
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-all duration-200 bg-white/50 backdrop-blur-sm"
                     required
                   />
                 </div>
 
+                {/* Dropdown to pick what kind of course this is */}
                 <div>
                   <label
-                    htmlFor="courseOfferPrice"
+                    htmlFor="courseCategory"
                     className="block text-sm font-semibold text-gray-700 mb-2"
                   >
-                    Offer Price ($){" "}
-                    <span className="text-gray-500 text-xs">(Optional)</span>
+                    Course Category <span className="text-red-500">*</span>
                   </label>
-                  <input
-                    type="number"
-                    id="courseOfferPrice"
-                    name="courseOfferPrice"
-                    value={courseData.courseOfferPrice}
+                  <select
+                    id="courseCategory"
+                    name="courseCategory"
+                    value={courseData.courseCategory}
                     onChange={handleInputChange}
-                    placeholder="79.99"
-                    min="0"
-                    step="0.01"
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-all duration-200 bg-white/50 backdrop-blur-sm"
-                  />
+                    required
+                    disabled={categoriesLoading}
+                  >
+                    {categoriesLoading ? (
+                      <option value="">Loading categories...</option>
+                    ) : (
+                      <>
+                        <option value="">Select a category</option>
+                        {categories.map((category, index) => (
+                          <option key={index} value={category}>
+                            {category}
+                          </option>
+                        ))}
+                      </>
+                    )}
+                  </select>
                 </div>
 
+                {/* Rich text editor for detailed course description */}
                 <div>
                   <label
-                    htmlFor="discount"
+                    htmlFor="courseDescription"
                     className="block text-sm font-semibold text-gray-700 mb-2"
                   >
-                    Discount %{" "}
-                    <span className="text-gray-500 text-xs">
-                      (Auto-calculated)
-                    </span>
+                    Course Description <span className="text-red-500">*</span>
                   </label>
-                  <input
-                    type="number"
-                    id="discount"
-                    name="discount"
-                    value={courseData.discount}
-                    readOnly
-                    placeholder="0"
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg bg-gray-100 text-gray-600 cursor-not-allowed"
+                  <div
+                    ref={editorRef}
+                    className="quill-editor bg-white/50 backdrop-blur-sm border border-gray-300 rounded-lg focus-within:ring-2 focus-within:ring-orange-500 focus-within:border-transparent transition-all duration-200"
+                    style={{ minHeight: "200px" }}
                   />
                 </div>
-              </div>
 
-              {/* Upload a nice thumbnail image for the course */}
-              <div>
-                <label
-                  htmlFor="courseThumbnail"
-                  className="block text-sm font-semibold text-gray-700 mb-2"
-                >
-                  Course Thumbnail <span className="text-red-500">*</span>
-                </label>
-                <div className="flex items-center space-x-4">
-                  <div className="flex-1">
+                {/* Course pricing - regular price and optional discount price */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  <div>
+                    <label
+                      htmlFor="coursePrice"
+                      className="block text-sm font-semibold text-gray-700 mb-2"
+                    >
+                      Course Price ($) <span className="text-red-500">*</span>
+                    </label>
                     <input
-                      type="file"
-                      id="courseThumbnail"
-                      name="courseThumbnail"
-                      onChange={handleThumbnailChange}
-                      accept="image/*"
+                      type="number"
+                      id="coursePrice"
+                      name="coursePrice"
+                      value={courseData.coursePrice}
+                      onChange={handleInputChange}
+                      placeholder="99.99"
+                      min="0"
+                      step="0.01"
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-all duration-200 bg-white/50 backdrop-blur-sm"
                       required
+                    />
+                  </div>
+
+                  <div>
+                    <label
+                      htmlFor="courseOfferPrice"
+                      className="block text-sm font-semibold text-gray-700 mb-2"
+                    >
+                      Offer Price ($){" "}
+                      <span className="text-gray-500 text-xs">(Optional)</span>
+                    </label>
+                    <input
+                      type="number"
+                      id="courseOfferPrice"
+                      name="courseOfferPrice"
+                      value={courseData.courseOfferPrice}
+                      onChange={handleInputChange}
+                      placeholder="79.99"
+                      min="0"
+                      step="0.01"
                       className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-all duration-200 bg-white/50 backdrop-blur-sm"
                     />
                   </div>
-                  {detailedThumbnailPreview && (
-                    <div className="w-20 h-12 rounded-lg overflow-hidden border-2 border-orange-200">
-                      <img
-                        src={detailedThumbnailPreview}
-                        alt="Thumbnail preview"
-                        className="w-full h-full object-cover"
+
+                  <div>
+                    <label
+                      htmlFor="discount"
+                      className="block text-sm font-semibold text-gray-700 mb-2"
+                    >
+                      Discount %{" "}
+                      <span className="text-gray-500 text-xs">
+                        (Auto-calculated)
+                      </span>
+                    </label>
+                    <input
+                      type="number"
+                      id="discount"
+                      name="discount"
+                      value={courseData.discount}
+                      readOnly
+                      placeholder="0"
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg bg-gray-100 text-gray-600 cursor-not-allowed"
+                    />
+                  </div>
+                </div>
+
+                {/* Upload a nice thumbnail image for the course */}
+                <div>
+                  <label
+                    htmlFor="courseThumbnail"
+                    className="block text-sm font-semibold text-gray-700 mb-2"
+                  >
+                    Course Thumbnail <span className="text-red-500">*</span>
+                  </label>
+                  <div className="flex items-center space-x-4">
+                    <div className="flex-1">
+                      <input
+                        type="file"
+                        id="courseThumbnail"
+                        name="courseThumbnail"
+                        onChange={handleThumbnailChange}
+                        accept="image/*"
+                        required
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-all duration-200 bg-white/50 backdrop-blur-sm"
                       />
+                    </div>
+                    {detailedThumbnailPreview && (
+                      <div className="w-20 h-12 rounded-lg overflow-hidden border-2 border-orange-200">
+                        <img
+                          src={detailedThumbnailPreview}
+                          alt="Thumbnail preview"
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* This is where we build the actual course content */}
+                <div>
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-lg font-semibold text-gray-800">
+                      Course Content
+                    </h3>
+                    <button
+                      type="button"
+                      onClick={addChapter}
+                      className="px-4 py-2 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg hover:from-blue-600 hover:to-blue-700 transition-all duration-200 font-medium text-sm flex items-center gap-2"
+                    >
+                      Add Chapter
+                    </button>
+                  </div>
+
+                  {courseData.courseContent.length === 0 ? (
+                    <div className="bg-gray-50/80 border-2 border-dashed border-gray-300 rounded-lg p-8 text-center">
+                      <p className="text-gray-500 mb-4">
+                        No chapters added yet
+                      </p>
+                      <button
+                        type="button"
+                        onClick={addChapter}
+                        className="px-6 py-3 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg hover:from-blue-600 hover:to-blue-700 transition-all duration-200 font-medium"
+                      >
+                        Add Your First Chapter
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="space-y-6">
+                      {courseData.courseContent.map((chapter, chapterIndex) => (
+                        <div
+                          key={chapter.chapterId}
+                          className="bg-gray-50/80 rounded-lg p-6 border border-gray-200"
+                        >
+                          {/* Chapter title and delete button */}
+                          <div className="flex items-center justify-between mb-4">
+                            <h4 className="text-md font-semibold text-gray-700">
+                              Chapter {chapterIndex + 1}
+                            </h4>
+                            <button
+                              type="button"
+                              onClick={() => deleteChapter(chapterIndex)}
+                              className="delete-btn p-2 rounded-full text-red-500 hover:text-red-700 hover:bg-red-50 transition-all duration-200 cursor-pointer"
+                              title="Delete Chapter"
+                            >
+                              ❌
+                            </button>
+                          </div>
+
+                          {/* Input for the chapter name */}
+                          <div className="mb-4">
+                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                              Chapter Title{" "}
+                              <span className="text-red-500">*</span>
+                            </label>
+                            <input
+                              type="text"
+                              value={chapter.chapterTitle}
+                              onChange={(e) =>
+                                updateChapter(
+                                  chapterIndex,
+                                  "chapterTitle",
+                                  e.target.value
+                                )
+                              }
+                              placeholder="Enter chapter title"
+                              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-all duration-200 bg-white"
+                              required
+                            />
+                          </div>
+
+                          {/* All the lectures for this chapter */}
+                          <div>
+                            <div className="flex items-center justify-between mb-3">
+                              <h5 className="text-sm font-medium text-gray-700">
+                                Lectures
+                              </h5>
+                              <button
+                                type="button"
+                                onClick={() => addLecture(chapterIndex)}
+                                className="px-3 py-1 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-md hover:from-green-600 hover:to-green-700 transition-all duration-200 font-medium text-xs flex items-center gap-1"
+                              >
+                                Add Lecture
+                              </button>
+                            </div>
+
+                            {chapter.chapterContent.length === 0 ? (
+                              <div className="bg-white border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
+                                <p className="text-gray-500 text-sm mb-3">
+                                  No lectures added
+                                </p>
+                                <button
+                                  type="button"
+                                  onClick={() => addLecture(chapterIndex)}
+                                  className="px-4 py-2 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-lg hover:from-green-600 hover:to-green-700 transition-all duration-200 font-medium text-sm"
+                                >
+                                  Add First Lecture
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="space-y-4">
+                                {chapter.chapterContent.map(
+                                  (lecture, lectureIndex) => (
+                                    <div
+                                      key={lecture.lectureId}
+                                      className="bg-white rounded-lg p-4 border border-gray-200"
+                                    >
+                                      <div className="flex items-center justify-between mb-3">
+                                        <h6 className="text-sm font-medium text-gray-600">
+                                          Lecture {lectureIndex + 1}
+                                        </h6>
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            deleteLecture(
+                                              chapterIndex,
+                                              lectureIndex
+                                            )
+                                          }
+                                          className="delete-btn p-1.5 rounded-full text-red-500 hover:text-red-700 hover:bg-red-50 transition-all duration-200 cursor-pointer"
+                                          title="Delete Lecture"
+                                        >
+                                          ❌
+                                        </button>
+                                      </div>
+
+                                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        {/* What to call this lecture */}
+                                        <div>
+                                          <label className="block text-xs font-medium text-gray-600 mb-1">
+                                            Lecture Title{" "}
+                                            <span className="text-red-500">
+                                              *
+                                            </span>
+                                          </label>
+                                          <input
+                                            type="text"
+                                            value={lecture.lectureTitle}
+                                            onChange={(e) =>
+                                              updateLecture(
+                                                chapterIndex,
+                                                lectureIndex,
+                                                "lectureTitle",
+                                                e.target.value
+                                              )
+                                            }
+                                            placeholder="Enter lecture title"
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-all duration-200 text-sm"
+                                            required
+                                          />
+                                        </div>
+
+                                        {/* How long is this lecture? */}
+                                        <div>
+                                          <label className="block text-xs font-medium text-gray-600 mb-1">
+                                            Duration (minutes){" "}
+                                            <span className="text-red-500">
+                                              *
+                                            </span>
+                                          </label>
+                                          <input
+                                            type="number"
+                                            value={lecture.lectureDuration}
+                                            onChange={(e) =>
+                                              updateLecture(
+                                                chapterIndex,
+                                                lectureIndex,
+                                                "lectureDuration",
+                                                parseInt(e.target.value) || 0
+                                              )
+                                            }
+                                            placeholder="15"
+                                            min="1"
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-all duration-200 text-sm"
+                                            required
+                                          />
+                                        </div>
+
+                                        {/* Where can students watch this lecture? */}
+                                        <div className="md:col-span-2">
+                                          <label className="block text-xs font-medium text-gray-600 mb-1">
+                                            Lecture URL{" "}
+                                            <span className="text-red-500">
+                                              *
+                                            </span>
+                                          </label>
+                                          <input
+                                            type="url"
+                                            value={lecture.lectureUrl}
+                                            onChange={(e) =>
+                                              updateLecture(
+                                                chapterIndex,
+                                                lectureIndex,
+                                                "lectureUrl",
+                                                e.target.value
+                                              )
+                                            }
+                                            placeholder="https://youtu.be/example"
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-all duration-200 text-sm"
+                                            required
+                                          />
+                                        </div>
+
+                                        {/* Should this be free for people to preview? */}
+                                        <div className="md:col-span-2">
+                                          <label className="flex items-center space-x-2 cursor-pointer">
+                                            <input
+                                              type="checkbox"
+                                              checked={lecture.isPreviewFree}
+                                              onChange={(e) =>
+                                                updateLecture(
+                                                  chapterIndex,
+                                                  lectureIndex,
+                                                  "isPreviewFree",
+                                                  e.target.checked
+                                                )
+                                              }
+                                              className="w-4 h-4 text-orange-600 bg-gray-100 border-gray-300 rounded focus:ring-orange-500 focus:ring-2"
+                                            />
+                                            <span className="text-sm text-gray-700">
+                                              Make this lecture free for preview
+                                            </span>
+                                          </label>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  )
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   )}
                 </div>
               </div>
 
-              {/* This is where we build the actual course content */}
-              <div>
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-lg font-semibold text-gray-800">
-                    Course Content
-                  </h3>
-                  <button
-                    type="button"
-                    onClick={addChapter}
-                    className="px-4 py-2 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg hover:from-blue-600 hover:to-blue-700 transition-all duration-200 font-medium text-sm flex items-center gap-2"
-                  >
-                    Add Chapter
-                  </button>
-                </div>
-
-                {courseData.courseContent.length === 0 ? (
-                  <div className="bg-gray-50/80 border-2 border-dashed border-gray-300 rounded-lg p-8 text-center">
-                    <p className="text-gray-500 mb-4">No chapters added yet</p>
+              {/* Form Footer */}
+              <div className="bg-gray-50/80 border-t border-gray-200/60 px-6 py-4">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm text-gray-600">
+                    All fields marked with * are required
+                  </p>
+                  <div className="flex space-x-3">
                     <button
                       type="button"
-                      onClick={addChapter}
-                      className="px-6 py-3 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg hover:from-blue-600 hover:to-blue-700 transition-all duration-200 font-medium"
+                      className="px-6 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors duration-200"
                     >
-                      Add Your First Chapter
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      className="px-6 py-2 bg-gradient-to-r from-orange-500 to-red-600 text-white rounded-lg hover:from-orange-600 hover:to-red-700 transition-all duration-200 font-semibold"
+                    >
+                      Create Course (Detailed Form)
                     </button>
                   </div>
-                ) : (
-                  <div className="space-y-6">
-                    {courseData.courseContent.map((chapter, chapterIndex) => (
-                      <div
-                        key={chapter.chapterId}
-                        className="bg-gray-50/80 rounded-lg p-6 border border-gray-200"
-                      >
-                        {/* Chapter title and delete button */}
-                        <div className="flex items-center justify-between mb-4">
-                          <h4 className="text-md font-semibold text-gray-700">
-                            Chapter {chapterIndex + 1}
-                          </h4>
-                          <button
-                            type="button"
-                            onClick={() => deleteChapter(chapterIndex)}
-                            className="delete-btn p-2 rounded-full text-red-500 hover:text-red-700 hover:bg-red-50 transition-all duration-200 cursor-pointer"
-                            title="Delete Chapter"
-                          >
-                            ❌
-                          </button>
-                        </div>
-
-                        {/* Input for the chapter name */}
-                        <div className="mb-4">
-                          <label className="block text-sm font-medium text-gray-700 mb-2">
-                            Chapter Title{" "}
-                            <span className="text-red-500">*</span>
-                          </label>
-                          <input
-                            type="text"
-                            value={chapter.chapterTitle}
-                            onChange={(e) =>
-                              updateChapter(
-                                chapterIndex,
-                                "chapterTitle",
-                                e.target.value
-                              )
-                            }
-                            placeholder="Enter chapter title"
-                            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-all duration-200 bg-white"
-                            required
-                          />
-                        </div>
-
-                        {/* All the lectures for this chapter */}
-                        <div>
-                          <div className="flex items-center justify-between mb-3">
-                            <h5 className="text-sm font-medium text-gray-700">
-                              Lectures
-                            </h5>
-                            <button
-                              type="button"
-                              onClick={() => addLecture(chapterIndex)}
-                              className="px-3 py-1 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-md hover:from-green-600 hover:to-green-700 transition-all duration-200 font-medium text-xs flex items-center gap-1"
-                            >
-                              Add Lecture
-                            </button>
-                          </div>
-
-                          {chapter.chapterContent.length === 0 ? (
-                            <div className="bg-white border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
-                              <p className="text-gray-500 text-sm mb-3">
-                                No lectures added
-                              </p>
-                              <button
-                                type="button"
-                                onClick={() => addLecture(chapterIndex)}
-                                className="px-4 py-2 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-lg hover:from-green-600 hover:to-green-700 transition-all duration-200 font-medium text-sm"
-                              >
-                                Add First Lecture
-                              </button>
-                            </div>
-                          ) : (
-                            <div className="space-y-4">
-                              {chapter.chapterContent.map(
-                                (lecture, lectureIndex) => (
-                                  <div
-                                    key={lecture.lectureId}
-                                    className="bg-white rounded-lg p-4 border border-gray-200"
-                                  >
-                                    <div className="flex items-center justify-between mb-3">
-                                      <h6 className="text-sm font-medium text-gray-600">
-                                        Lecture {lectureIndex + 1}
-                                      </h6>
-                                      <button
-                                        type="button"
-                                        onClick={() =>
-                                          deleteLecture(
-                                            chapterIndex,
-                                            lectureIndex
-                                          )
-                                        }
-                                        className="delete-btn p-1.5 rounded-full text-red-500 hover:text-red-700 hover:bg-red-50 transition-all duration-200 cursor-pointer"
-                                        title="Delete Lecture"
-                                      >
-                                        ❌
-                                      </button>
-                                    </div>
-
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                      {/* What to call this lecture */}
-                                      <div>
-                                        <label className="block text-xs font-medium text-gray-600 mb-1">
-                                          Lecture Title{" "}
-                                          <span className="text-red-500">
-                                            *
-                                          </span>
-                                        </label>
-                                        <input
-                                          type="text"
-                                          value={lecture.lectureTitle}
-                                          onChange={(e) =>
-                                            updateLecture(
-                                              chapterIndex,
-                                              lectureIndex,
-                                              "lectureTitle",
-                                              e.target.value
-                                            )
-                                          }
-                                          placeholder="Enter lecture title"
-                                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-all duration-200 text-sm"
-                                          required
-                                        />
-                                      </div>
-
-                                      {/* How long is this lecture? */}
-                                      <div>
-                                        <label className="block text-xs font-medium text-gray-600 mb-1">
-                                          Duration (minutes){" "}
-                                          <span className="text-red-500">
-                                            *
-                                          </span>
-                                        </label>
-                                        <input
-                                          type="number"
-                                          value={lecture.lectureDuration}
-                                          onChange={(e) =>
-                                            updateLecture(
-                                              chapterIndex,
-                                              lectureIndex,
-                                              "lectureDuration",
-                                              parseInt(e.target.value) || 0
-                                            )
-                                          }
-                                          placeholder="15"
-                                          min="1"
-                                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-all duration-200 text-sm"
-                                          required
-                                        />
-                                      </div>
-
-                                      {/* Where can students watch this lecture? */}
-                                      <div className="md:col-span-2">
-                                        <label className="block text-xs font-medium text-gray-600 mb-1">
-                                          Lecture URL{" "}
-                                          <span className="text-red-500">
-                                            *
-                                          </span>
-                                        </label>
-                                        <input
-                                          type="url"
-                                          value={lecture.lectureUrl}
-                                          onChange={(e) =>
-                                            updateLecture(
-                                              chapterIndex,
-                                              lectureIndex,
-                                              "lectureUrl",
-                                              e.target.value
-                                            )
-                                          }
-                                          placeholder="https://youtu.be/example"
-                                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-all duration-200 text-sm"
-                                          required
-                                        />
-                                      </div>
-
-                                      {/* Should this be free for people to preview? */}
-                                      <div className="md:col-span-2">
-                                        <label className="flex items-center space-x-2 cursor-pointer">
-                                          <input
-                                            type="checkbox"
-                                            checked={lecture.isPreviewFree}
-                                            onChange={(e) =>
-                                              updateLecture(
-                                                chapterIndex,
-                                                lectureIndex,
-                                                "isPreviewFree",
-                                                e.target.checked
-                                              )
-                                            }
-                                            className="w-4 h-4 text-orange-600 bg-gray-100 border-gray-300 rounded focus:ring-orange-500 focus:ring-2"
-                                          />
-                                          <span className="text-sm text-gray-700">
-                                            Make this lecture free for preview
-                                          </span>
-                                        </label>
-                                      </div>
-                                    </div>
-                                  </div>
-                                )
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Form Footer */}
-            <div className="bg-gray-50/80 border-t border-gray-200/60 px-6 py-4">
-              <div className="flex items-center justify-between">
-                <p className="text-sm text-gray-600">
-                  All fields marked with * are required
-                </p>
-                <div className="flex space-x-3">
-                  <button
-                    type="button"
-                    className="px-6 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors duration-200"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={isDetailedUploading}
-                    className={`px-6 py-3 rounded-lg font-semibold transition-all duration-200 ${
-                      isDetailedUploading
-                        ? "bg-gray-400 text-gray-200 cursor-not-allowed"
-                        : "bg-gradient-to-r from-orange-500 to-red-600 text-white hover:from-orange-600 hover:to-red-700 transform hover:scale-105"
-                    }`}
-                  >
-                    {isDetailedUploading
-                      ? "Creating..."
-                      : "Create Course (Detailed Form)"}
-                  </button>
                 </div>
               </div>
             </div>
+          </form>
+        </div>
+
+        {/* Additional Info Cards */}
+        <div className="w-full mt-8 grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="bg-white/80 backdrop-blur-md rounded-xl shadow-lg border border-white/20 p-6 text-center">
+            <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-3">
+              📄
+            </div>
+            <h3 className="font-semibold text-gray-800 mb-2">Upload Content</h3>
+            <p className="text-gray-600 text-sm">
+              Add videos, documents, and resources after creating the course
+            </p>
           </div>
-        </form>
+
+          <div className="bg-white/80 backdrop-blur-md rounded-xl shadow-lg border border-white/20 p-6 text-center">
+            <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-3">
+              👥
+            </div>
+            <h3 className="font-semibold text-gray-800 mb-2">Reach Students</h3>
+            <p className="text-gray-600 text-sm">
+              Your course will be visible to students once published
+            </p>
+          </div>
+
+          <div className="bg-white/80 backdrop-blur-md rounded-xl shadow-lg border border-white/20 p-6 text-center">
+            <div className="w-12 h-12 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-3">
+              💰
+            </div>
+            <h3 className="font-semibold text-gray-800 mb-2">Earn Revenue</h3>
+            <p className="text-gray-600 text-sm">
+              Start earning from student enrollments immediately
+            </p>
+          </div>
+        </div>
       </div>
-
-      {/* Additional Info Cards */}
-      <div className="w-full mt-8 grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="bg-white/80 backdrop-blur-md rounded-xl shadow-lg border border-white/20 p-6 text-center">
-          <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-3">
-            📄
-          </div>
-          <h3 className="font-semibold text-gray-800 mb-2">Upload Content</h3>
-          <p className="text-gray-600 text-sm">
-            Add videos, documents, and resources after creating the course
-          </p>
-        </div>
-
-        <div className="bg-white/80 backdrop-blur-md rounded-xl shadow-lg border border-white/20 p-6 text-center">
-          <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-3">
-            👥
-          </div>
-          <h3 className="font-semibold text-gray-800 mb-2">Reach Students</h3>
-          <p className="text-gray-600 text-sm">
-            Your course will be visible to students once published
-          </p>
-        </div>
-
-        <div className="bg-white/80 backdrop-blur-md rounded-xl shadow-lg border border-white/20 p-6 text-center">
-          <div className="w-12 h-12 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-3">
-            💰
-          </div>
-          <h3 className="font-semibold text-gray-800 mb-2">Earn Revenue</h3>
-          <p className="text-gray-600 text-sm">
-            Start earning from student enrollments immediately
-          </p>
-        </div>
-      </div>
-    </div>
+    </>
   );
 };
 

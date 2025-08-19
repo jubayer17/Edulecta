@@ -11,6 +11,7 @@ import {
   FiBookOpen,
   FiClock,
   FiShoppingBag,
+  FiHeart,
 } from "react-icons/fi";
 import { useClerk, useUser, UserButton } from "@clerk/clerk-react";
 import { AppContext } from "../../context/AppContext";
@@ -194,7 +195,7 @@ const Navbar = () => {
             />
           </Link>
 
-          {/* Right side: Cart + Profile + Menu */}
+          {/* Right side: Cart + Wishlist + Profile + Menu */}
           <div className="flex items-center gap-2">
             {/* Cart Icon - Enhanced */}
             <button
@@ -232,7 +233,20 @@ const Navbar = () => {
                         "w-9 h-9 ring-2 ring-blue-100 hover:ring-blue-200 transition-all",
                     },
                   }}
-                />
+                >
+                  <UserButton.MenuItems>
+                    <UserButton.Link
+                      label="Wishlist"
+                      labelIcon={<FiHeart />}
+                      href="/wishlist"
+                    />
+                    <UserButton.Link
+                      label="Cart"
+                      labelIcon={<FiShoppingBag />}
+                      href="/cart"
+                    />
+                  </UserButton.MenuItems>
+                </UserButton>
               ) : (
                 <button
                   onClick={openSignIn}
@@ -534,7 +548,20 @@ const Navbar = () => {
                         "w-10 h-10 ring-2 ring-blue-100 hover:ring-blue-200 transition-all",
                     },
                   }}
-                />
+                >
+                  <UserButton.MenuItems>
+                    <UserButton.Link
+                      label="Wishlist"
+                      labelIcon={<FiHeart />}
+                      href="/wishlist"
+                    />
+                    <UserButton.Link
+                      label="Cart"
+                      labelIcon={<FiShoppingBag />}
+                      href="/cart"
+                    />
+                  </UserButton.MenuItems>
+                </UserButton>
               ) : (
                 <div className="flex items-center gap-3">
                   <img
