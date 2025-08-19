@@ -62,24 +62,25 @@ const Cart = () => {
     setIsCheckoutLoading(true);
 
     try {
-      console.log("🛒 Starting cart checkout...");
+      console.log("🛒 Starting secure cart checkout...");
       toast.info("Creating secure Stripe checkout session...");
 
       const result = await purchaseCart(cartItems);
 
-      if (result.success && result.sessionUrl) {
-        console.log("✅ Checkout session created successfully");
+      if (result.success) {
+        console.log(
+          `✅ Checkout session created for ${result.courseCount} courses`
+        );
+        console.log(`💰 Total amount: $${result.totalAmount}`);
 
-        // Clear the cart since we're proceeding to payment
         clearCart();
 
         toast.success(
-          `Redirecting to secure checkout for ${
-            result.courseCount || cartItems.length
-          } course${(result.courseCount || cartItems.length) > 1 ? "s" : ""}...`
+          `Redirecting to secure checkout for ${result.courseCount} course${
+            result.courseCount > 1 ? "s" : ""
+          }...`
         );
 
-        // Small delay to show success message, then redirect
         setTimeout(() => {
           window.location.href = result.sessionUrl;
         }, 1500);

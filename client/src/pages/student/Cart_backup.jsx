@@ -6,9 +6,12 @@ import {
   FiCreditCard,
   FiArrowLeft,
   FiHeart,
+  FiClock,
+  FiUsers,
   FiStar,
   FiInfo,
   FiCheck,
+  FiGift,
 } from "react-icons/fi";
 import { Link } from "react-router-dom";
 import { toast } from "react-toastify";
@@ -22,7 +25,7 @@ const Cart = () => {
     getCartTotal,
     navigate,
     userData,
-    purchaseCart,
+    purchaseCart, // Added secure cart checkout function
   } = useContext(AppContext);
 
   const [removingItem, setRemovingItem] = useState(null);
@@ -62,21 +65,25 @@ const Cart = () => {
     setIsCheckoutLoading(true);
 
     try {
-      console.log("🛒 Starting cart checkout...");
+      console.log("🛒 Starting secure cart checkout...");
       toast.info("Creating secure Stripe checkout session...");
 
+      // Use the secure cart checkout function
       const result = await purchaseCart(cartItems);
 
-      if (result.success && result.sessionUrl) {
-        console.log("✅ Checkout session created successfully");
+      if (result.success) {
+        console.log(
+          `✅ Checkout session created for ${result.courseCount} courses`
+        );
+        console.log(`💰 Total amount: $${result.totalAmount}`);
 
         // Clear the cart since we're proceeding to payment
         clearCart();
 
         toast.success(
-          `Redirecting to secure checkout for ${
-            result.courseCount || cartItems.length
-          } course${(result.courseCount || cartItems.length) > 1 ? "s" : ""}...`
+          `Redirecting to secure checkout for ${result.courseCount} course${
+            result.courseCount > 1 ? "s" : ""
+          }...`
         );
 
         // Small delay to show success message, then redirect
@@ -118,7 +125,7 @@ const Cart = () => {
 
   return (
     <div className="pb-20 md:pb-0 bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 min-h-screen">
-      {/* Header Section */}
+      {/* Header Section - Enhanced */}
       <div className="bg-white shadow-sm border-b border-gray-100">
         <div className="max-w-7xl mx-auto px-1 sm:px-2 lg:px-3 py-2">
           <div className="flex items-center justify-between">
@@ -149,7 +156,7 @@ const Cart = () => {
 
       <div className="max-w-7xl mx-auto px-1 sm:px-2 lg:px-3 py-3">
         {cartItems.length === 0 ? (
-          /* Empty Cart */
+          /* Empty Cart - Enhanced with animations */
           <div className="text-center py-12">
             <div className="relative mb-6">
               <div className="w-24 h-24 mx-auto bg-gradient-to-br from-blue-100 to-indigo-200 rounded-full flex items-center justify-center animate-bounce">
@@ -189,9 +196,7 @@ const Cart = () => {
             <div className="lg:col-span-2">
               <div className="bg-white/80 backdrop-blur-md rounded-2xl shadow-lg border border-white/20 overflow-hidden">
                 <div className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white p-4">
-                  <h2 className="text-lg font-semibold">
-                    Cart Items ({cartItems.length})
-                  </h2>
+                  <h2 className="text-lg font-semibold">Cart Items ({cartItems.length})</h2>
                 </div>
 
                 <div className="overflow-x-auto">
@@ -213,109 +218,119 @@ const Cart = () => {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-200/60">
-                      {cartItems.map((course) => {
-                        const { finalPrice, originalPrice, hasDiscount } =
-                          formatPrice(course);
-                        const isRemoving = removingItem === course._id;
+              {cartItems.map((course, index) => {
+                const { finalPrice, originalPrice, hasDiscount } =
+                  formatPrice(course);
+                const isRemoving = removingItem === course._id;
 
-                        return (
-                          <tr
-                            key={course._id}
-                            className={`hover:bg-blue-50/30 transition-colors duration-200 ${
-                              isRemoving ? "opacity-50" : ""
-                            }`}
-                          >
-                            <td className="px-6 py-4">
-                              <div className="flex items-center space-x-3">
-                                {/* Thumbnail */}
-                                <div className="flex-shrink-0">
-                                  <img
-                                    src={course.courseThumbnail}
-                                    alt={course.courseTitle}
-                                    className="h-full max-h-16 w-16 object-cover rounded"
-                                  />
-                                </div>
+                return (
+                  <div
+                    key={course._id}
+                    className={`bg-white rounded-2xl shadow-md hover:shadow-xl transition-all duration-300 p-4 border border-gray-100 ${
+                      isRemoving
+                        ? "scale-95 opacity-50"
+                        : "scale-100 opacity-100"
+                    }`}
+                    style={{ animationDelay: `${index * 100}ms` }}
+                  >
+                    <div className="flex flex-col sm:flex-row gap-4">
+                      {/* Course Image - Enhanced */}
+                      <div className="relative w-full sm:w-40 h-24 sm:h-28 rounded-xl overflow-hidden bg-gray-100 flex-shrink-0 group">
+                        <img
+                          src={course.courseThumbnail}
+                          alt={course.courseTitle}
+                          className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
+                        />
+                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-300"></div>
+                        {hasDiscount && (
+                          <div className="absolute top-2 left-2 bg-red-500 text-white text-xs font-bold px-2 py-1 rounded-full">
+                            -
+                            {Math.round(
+                              ((originalPrice - finalPrice) / originalPrice) *
+                                100
+                            )}
+                            % OFF
+                          </div>
+                        )}
+                      </div>
 
-                                {/* Text */}
-                                <div className="flex flex-col justify-center">
-                                  <p className="text-sm font-semibold text-gray-800 max-w-xs truncate">
-                                    {course.courseTitle}
-                                  </p>
-                                  <p className="text-xs text-gray-500">
-                                    {course.enrolledStudents?.length || 0}{" "}
-                                    students enrolled
-                                  </p>
-                                </div>
-                              </div>
-                            </td>
+                      {/* Course Info - Enhanced */}
+                      <div className="flex-grow space-y-1">
+                        <div>
+                          <h3 className="font-semibold text-gray-900 text-sm mb-0.5 line-clamp-1 hover:text-blue-600 transition-colors">
+                            {course.courseTitle}
+                          </h3>
+                          <p className="text-gray-600 text-xs flex items-center gap-1">
+                            <FiUsers className="w-3 h-3" />
+                            by {course.educator?.username || "Instructor"}
+                          </p>
+                        </div>
 
-                            <td className="px-6 py-4">
-                              <div className="text-sm">
-                                <p className="font-medium text-gray-800">
-                                  {course.educator?.username ||
-                                    "Unknown Instructor"}
-                                </p>
-                              </div>
-                            </td>
+                        {/* Course Statistics */}
+                        <div className="flex items-center gap-3 text-xs text-gray-500">
+                          <span className="flex items-center gap-1">
+                            <FiClock className="w-3 h-3" />
+                            {course.courseDuration || "10h 30m"}
+                          </span>
+                          <span className="flex items-center gap-1">
+                            <FiUsers className="w-3 h-3" />
+                            {course.enrolledStudents?.length || 0} students
+                          </span>
+                          <span className="flex items-center gap-1">
+                            <FiStar className="w-3 h-3 text-yellow-500" />
+                            4.8 rating
+                          </span>
+                        </div>
 
-                            <td className="px-6 py-4">
-                              <div className="text-sm">
-                                <p className="font-semibold text-blue-600">
-                                  ${finalPrice.toFixed(2)}
-                                </p>
-                                {hasDiscount && (
-                                  <p className="text-xs text-gray-400 line-through">
-                                    ${originalPrice.toFixed(2)}
-                                  </p>
-                                )}
-                              </div>
-                            </td>
+                        {/* Features */}
+                        <div className="flex gap-1">
+                          <span className="flex items-center gap-0.5 text-xs bg-green-50 text-green-600 px-1.5 py-0.5 rounded-full">
+                            <FiCheck className="w-2.5 h-2.5" />
+                            Lifetime Access
+                          </span>
+                          <span className="flex items-center gap-0.5 text-xs bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded-full">
+                            <FiGift className="w-2.5 h-2.5" />
+                            Certificate
+                          </span>
+                        </div>
 
-                            <td className="px-6 py-4">
-                              <div className="flex items-center gap-2">
-                                <button
-                                  className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all duration-200"
-                                  title="Add to Wishlist"
-                                >
-                                  <FiHeart className="w-4 h-4" />
-                                </button>
-                                <button
-                                  onClick={() => handleRemoveItem(course._id)}
-                                  className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg transition-all duration-300 group"
-                                  title="Remove from Cart"
-                                >
-                                  <FiTrash2 className="w-4 h-4 group-hover:scale-110 transition-transform" />
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
+                        {/* Price and Actions */}
+                        <div className="flex items-center justify-between pt-1">
+                          <div className="flex items-center gap-2">
+                            <span className="text-lg font-bold text-blue-600">
+                              ${finalPrice.toFixed(2)}
+                            </span>
+                            {hasDiscount && (
+                              <span className="text-sm text-gray-400 line-through bg-gray-50 px-1.5 py-0.5 rounded">
+                                ${originalPrice.toFixed(2)}
+                              </span>
+                            )}
+                          </div>
 
-                {/* Clear All Button */}
-                {cartItems.length > 1 && (
-                  <div className="p-4 border-t border-gray-200/60 bg-gray-50/30">
-                    <button
-                      onClick={handleClearCart}
-                      className={`px-4 py-2 rounded-lg font-medium transition-all duration-300 ${
-                        showClearConfirm
-                          ? "bg-red-500 text-white hover:bg-red-600"
-                          : "text-red-600 hover:bg-red-50 border border-red-200"
-                      }`}
-                    >
-                      {showClearConfirm
-                        ? "Confirm Clear All"
-                        : "Clear All Items"}
-                    </button>
+                          <div className="flex items-center gap-2">
+                            <button
+                              className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all duration-200"
+                              title="Add to Wishlist"
+                            >
+                              <FiHeart className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => handleRemoveItem(course._id)}
+                              className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg transition-all duration-300 group"
+                              title="Remove from Cart"
+                            >
+                              <FiTrash2 className="w-4 h-4 group-hover:scale-110 transition-transform" />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
                   </div>
-                )}
-              </div>
+                );
+              })}
             </div>
 
-            {/* Cart Summary */}
+            {/* Cart Summary - Enhanced */}
             <div className="lg:col-span-1">
               <div className="bg-white rounded-2xl shadow-lg p-6 sticky top-4 border border-gray-100">
                 <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">

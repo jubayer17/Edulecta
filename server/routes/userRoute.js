@@ -4,6 +4,7 @@ import {
   GetUserEnrolledCourses,
   EnrollInCourse,
   purchaseCourse,
+  purchaseCartCourses,
   cancelPayment,
   getPaymentStatus,
   manualCompletePayment,
@@ -63,6 +64,9 @@ userRouter.post("/enroll", EnrollInCourse);
 
 // Purchase a course (protected route)
 userRouter.post("/purchase", purchaseCourse);
+
+// Purchase multiple courses from cart (protected route)
+userRouter.post("/purchase-cart", purchaseCartCourses);
 
 // Cancel payment (protected route)
 userRouter.post("/cancel-payment/:purchaseId", cancelPayment);

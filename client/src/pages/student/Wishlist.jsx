@@ -3,17 +3,10 @@ import { AppContext } from "../../context/AppContext";
 import { Link } from "react-router-dom";
 import axios from "axios";
 import { toast } from "react-toastify";
-import { FiHeart, FiTrash2, FiClock, FiUsers, FiStar } from "react-icons/fi";
-import { FaStar, FaStarHalfAlt, FaRegStar } from "react-icons/fa";
+import { FiHeart, FiTrash2 } from "react-icons/fi";
 
 const Wishlist = () => {
-  const {
-    backendUrl,
-    getToken,
-    userData,
-    calculateRating,
-    calculateCourseDuration,
-  } = useContext(AppContext);
+  const { backendUrl, getToken, userData } = useContext(AppContext);
   const [wishlistCourses, setWishlistCourses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [removingCourseId, setRemovingCourseId] = useState(null);
@@ -172,22 +165,16 @@ const Wishlist = () => {
               <table className="w-full">
                 <thead className="bg-gray-50/80 border-b border-gray-200/60">
                   <tr>
-                    <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">
-                      Course Details
+                    <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700">
+                      Course Title
                     </th>
-                    <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">
+                    <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700">
                       Instructor
                     </th>
-                    <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">
-                      Rating
-                    </th>
-                    <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">
+                    <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700">
                       Price
                     </th>
-                    <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">
-                      Added Date
-                    </th>
-                    <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">
+                    <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700">
                       Actions
                     </th>
                   </tr>
@@ -205,55 +192,39 @@ const Wishlist = () => {
                       return null;
                     }
 
-                    const rating = calculateRating(course);
-                    const courseDuration = calculateCourseDuration(course);
-
                     return (
                       <tr
                         key={course._id}
                         className="hover:bg-red-50/30 transition-colors duration-200"
                       >
-                        <td className="px-6 py-3">
+                        <td className="px-6 py-4">
                           <div className="flex items-center space-x-3">
                             {/* Thumbnail */}
                             <div className="flex-shrink-0">
-                              <Link to={`/course/${course._id}`}>
-                                <img
-                                  src={
-                                    course.courseThumbnail ||
-                                    "/placeholder-course.jpg"
-                                  }
-                                  alt={course.courseTitle || "Course"}
-                                  className="h-full max-h-16 w-16 object-cover rounded hover:scale-105 transition-transform duration-200"
-                                />
-                              </Link>
+                              <img
+                                src={
+                                  course.courseThumbnail ||
+                                  "/placeholder-course.jpg"
+                                }
+                                alt={course.courseTitle || "Course"}
+                                className="h-full max-h-16 w-16 object-cover rounded"
+                              />
                             </div>
 
                             {/* Text */}
                             <div className="flex flex-col justify-center">
-                              <Link to={`/course/${course._id}`}>
-                                <p className="text-sm font-semibold text-gray-800 max-w-xs truncate hover:text-blue-600 transition-colors">
-                                  {course.courseTitle || "Untitled Course"}
-                                </p>
-                              </Link>
-                              <div className="flex items-center gap-2 text-xs text-gray-500">
-                                <div className="flex items-center gap-1">
-                                  <FiClock className="w-3 h-3" />
-                                  <span>{courseDuration}</span>
-                                </div>
-                                <div className="flex items-center gap-1">
-                                  <FiUsers className="w-3 h-3" />
-                                  <span>
-                                    {course.enrolledStudents?.length || 0}{" "}
-                                    students
-                                  </span>
-                                </div>
-                              </div>
+                              <p className="text-sm font-semibold text-gray-800 max-w-xs truncate">
+                                {course.courseTitle || "Untitled Course"}
+                              </p>
+                              <p className="text-xs text-gray-500">
+                                Added:{" "}
+                                {new Date(item.addedAt).toLocaleDateString()}
+                              </p>
                             </div>
                           </div>
                         </td>
 
-                        <td className="px-6 py-3">
+                        <td className="px-6 py-4">
                           <div className="text-sm">
                             <p className="font-medium text-gray-800">
                               {course.educator?.username ||
@@ -262,46 +233,7 @@ const Wishlist = () => {
                           </div>
                         </td>
 
-                        <td className="px-6 py-3">
-                          <div className="flex items-center gap-2">
-                            <div className="flex items-center gap-1">
-                              <span className="text-yellow-600 font-semibold text-sm">
-                                {rating.toFixed(1)}
-                              </span>
-                              <div className="flex items-center gap-0.5">
-                                {[1, 2, 3, 4, 5].map((star) => {
-                                  if (rating >= star) {
-                                    return (
-                                      <FaStar
-                                        key={star}
-                                        className="w-3 h-3 text-yellow-400"
-                                      />
-                                    );
-                                  } else if (rating >= star - 0.5) {
-                                    return (
-                                      <FaStarHalfAlt
-                                        key={star}
-                                        className="w-3 h-3 text-yellow-400"
-                                      />
-                                    );
-                                  } else {
-                                    return (
-                                      <FaRegStar
-                                        key={star}
-                                        className="w-3 h-3 text-gray-300"
-                                      />
-                                    );
-                                  }
-                                })}
-                              </div>
-                            </div>
-                            <p className="text-xs text-gray-500">
-                              ({course.courseRatings?.length || 0})
-                            </p>
-                          </div>
-                        </td>
-
-                        <td className="px-6 py-3">
+                        <td className="px-6 py-4">
                           <div className="text-sm">
                             <p className="font-semibold text-blue-600">
                               $
@@ -312,19 +244,13 @@ const Wishlist = () => {
                           </div>
                         </td>
 
-                        <td className="px-6 py-3 text-sm text-gray-600">
-                          <div>
-                            <p>{new Date(item.addedAt).toLocaleDateString()}</p>
-                          </div>
-                        </td>
-
-                        <td className="px-6 py-3">
+                        <td className="px-6 py-4">
                           <div className="flex items-center gap-2">
                             <Link
                               to={`/course/${course._id}`}
                               className="px-3 py-1.5 bg-blue-600 text-white text-xs font-medium rounded-lg hover:bg-blue-700 transition-colors"
                             >
-                              View Course
+                              View
                             </Link>
                             <button
                               onClick={() => removeFromWishlist(course._id)}

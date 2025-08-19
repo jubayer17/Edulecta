@@ -555,6 +555,189 @@ export const purchaseCourse = async (req, res) => {
   }
 };
 
+// Purchase multiple courses (cart checkout)
+export const purchaseCartCourses = async (req, res) => {
+  try {
+    const { courseIds } = req.body || {};
+    const auth = req.auth();
+    const userId = auth?.userId;
+
+    const origin = req.headers.origin;
+    const baseUrl =
+      process.env.CLIENT_BASE_URL || origin || "http://localhost:5173";
+
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        error: "User authentication required",
+      });
+    }
+
+    if (!courseIds || !Array.isArray(courseIds) || courseIds.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: "Valid Course IDs array is required",
+      });
+    }
+
+    // Validate all course IDs
+    const invalidIds = courseIds.filter(
+      (id) => !mongoose.Types.ObjectId.isValid(id)
+    );
+    if (invalidIds.length > 0) {
+      return res.status(400).json({
+        success: false,
+        error: `Invalid course ID format: ${invalidIds.join(", ")}`,
+      });
+    }
+
+    await connectDB();
+
+    const userData = await User.findById(userId);
+    if (!userData) {
+      return res.status(404).json({
+        success: false,
+        error: "User not found",
+      });
+    }
+
+    // Fetch all courses
+    const coursesData = await Course.find({
+      _id: { $in: courseIds },
+      isPublished: true,
+    });
+
+    if (coursesData.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: "No valid published courses found",
+      });
+    }
+
+    if (coursesData.length !== courseIds.length) {
+      const foundIds = coursesData.map((c) => c._id.toString());
+      const missingIds = courseIds.filter((id) => !foundIds.includes(id));
+      return res.status(404).json({
+        success: false,
+        error: `Some courses not found or not published: ${missingIds.join(
+          ", "
+        )}`,
+      });
+    }
+
+    // Create purchase records for each course
+    const timestamp = Date.now();
+    const purchasePromises = coursesData.map(async (courseData) => {
+      // Check for existing pending purchase
+      const existingPurchase = await Purchase.findOne({
+        userId,
+        courseId: courseData._id,
+        status: { $in: ["pending", "incomplete"] },
+      });
+
+      if (existingPurchase) {
+        return existingPurchase;
+      }
+
+      // Calculate discounted price
+      const discount =
+        typeof courseData.discount === "number" ? courseData.discount : 0;
+      const discountedPrice =
+        Math.round(
+          (courseData.coursePrice - (discount * courseData.coursePrice) / 100) *
+            100
+        ) / 100;
+
+      const purchaseData = {
+        userId,
+        courseId: courseData._id,
+        amount: discountedPrice,
+        status: "pending",
+        purchaseDate: new Date(),
+        lastUpdated: new Date(),
+      };
+
+      return await Purchase.create(purchaseData);
+    });
+
+    const purchases = await Promise.all(purchasePromises);
+
+    // Calculate total amount
+    const totalAmount = purchases.reduce(
+      (sum, purchase) => sum + purchase.amount,
+      0
+    );
+
+    // Create Stripe line items
+    const lineItems = coursesData.map((courseData, index) => {
+      const purchase = purchases[index];
+      return {
+        price_data: {
+          currency: "USD",
+          product_data: {
+            name: courseData.courseTitle,
+            description: courseData.courseDescription || "Course purchase",
+            images: courseData.courseThumbnail
+              ? [courseData.courseThumbnail]
+              : undefined,
+          },
+          unit_amount: Math.round(purchase.amount * 100), // Stripe expects amount in cents
+        },
+        quantity: 1,
+      };
+    });
+
+    // Create Stripe session
+    const stripe = getStripeInstance();
+    const session = await stripe.checkout.sessions.create({
+      payment_method_types: ["card"],
+      line_items: lineItems,
+      mode: "payment",
+      success_url: `${baseUrl}/my-enrollments?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${baseUrl}/cart?canceled=true`,
+      customer_email: userData.email,
+      metadata: {
+        purchaseIds: purchases.map((p) => p._id.toString()).join(","),
+        userId: userId.toString(),
+        courseIds: courseIds.join(","),
+        timestamp: timestamp.toString(),
+        isCartPurchase: "true",
+      },
+      expires_at: Math.floor(Date.now() / 1000) + 60 * 30, // Session expires in 30 minutes
+    });
+
+    // Update all purchases with session ID
+    await Promise.all(
+      purchases.map(async (purchase) => {
+        purchase.stripeSessionId = session.id;
+        purchase.lastUpdated = new Date();
+        await purchase.save();
+      })
+    );
+
+    console.log(
+      `Created Stripe session ${session.id} for cart purchase with ${purchases.length} courses`
+    );
+
+    return res.status(200).json({
+      success: true,
+      message: "Cart payment session created successfully",
+      sessionId: session.id,
+      sessionUrl: session.url,
+      totalAmount,
+      courseCount: coursesData.length,
+      purchaseIds: purchases.map((p) => p._id),
+    });
+  } catch (error) {
+    console.error("Error creating cart purchase:", error);
+    return res.status(500).json({
+      success: false,
+      error: "Internal server error",
+      message: error.message,
+    });
+  }
+};
+
 // Handle payment cancellation
 export const cancelPayment = async (req, res) => {
   try {

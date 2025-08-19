@@ -13,26 +13,30 @@ const CategoryNavWrapper = ({ children }) => {
 
   // Show filtered courses on course listing pages when category is selected
   const showFilteredCourses =
-    selectedCategory !== null && 
-    (location.pathname === "/course-list" || 
-     location.pathname === "/top-picks-courses" || 
-     location.pathname === "/newly-added-courses" ||
-     location.pathname.startsWith("/course-list/"));
+    selectedCategory !== null &&
+    (location.pathname === "/course-list" ||
+      location.pathname === "/top-picks-courses" ||
+      location.pathname === "/newly-added-courses" ||
+      location.pathname.startsWith("/course-list/"));
 
   const handleCategorySelect = (category) => {
-    if (location.pathname === "/" || 
-        location.pathname === "/categories" || 
-        location.pathname === "/browse-courses") {
+    if (
+      location.pathname === "/" ||
+      location.pathname === "/categories" ||
+      location.pathname === "/browse-courses"
+    ) {
       // On home page and category pages, navigate to course list with category filter
       if (category) {
         navigate(`/course-list?category=${encodeURIComponent(category)}`);
       } else {
         navigate("/course-list");
       }
-    } else if (location.pathname === "/course-list" || 
-               location.pathname === "/top-picks-courses" || 
-               location.pathname === "/newly-added-courses" ||
-               location.pathname.startsWith("/course-list/")) {
+    } else if (
+      location.pathname === "/course-list" ||
+      location.pathname === "/top-picks-courses" ||
+      location.pathname === "/newly-added-courses" ||
+      location.pathname.startsWith("/course-list/")
+    ) {
       // On course listing pages, filter courses directly
       setSelectedCategory(category);
     } else {
