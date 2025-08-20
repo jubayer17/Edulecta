@@ -10,6 +10,7 @@ import {
   manualCompletePayment,
   getAllPurchases,
   simulateWebhook,
+  simulateCartWebhook,
   testWithDummyData,
   updateUserCourseProgress,
   getUserCourseProgress,
@@ -79,6 +80,9 @@ userRouter.post("/manual-complete/:purchaseId", manualCompletePayment);
 
 // Simulate webhook for testing (public route)
 userRouter.post("/simulate-webhook", simulateWebhook);
+
+// Simulate cart webhook for testing (public route)
+userRouter.post("/simulate-cart-webhook", simulateCartWebhook);
 
 // Test with dummy data (public route)
 userRouter.get("/test-dummy", testWithDummyData);

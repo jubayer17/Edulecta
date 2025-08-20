@@ -1,4 +1,4 @@
-import React, { useContext, useEffect, useState } from "react";
+import React, { useContext, useEffect, useState, useCallback } from "react";
 import { AppContext } from "../../context/AppContext";
 import Footer from "../../components/student/Footer";
 import { toast } from "react-toastify";
@@ -13,9 +13,12 @@ const MyEnrollments = () => {
     getToken,
     calculateNoOfLectures,
     userData,
+    fetchPendingPurchases,
   } = useContext(AppContext);
 
-  const [progressArray, setProgressArray] = React.useState([]);
+    const [progressArray, setProgressArray] = useState([]);
+  const [progressMap, setProgressMap] = useState({});
+  const [sortedEnrolledCourses, setSortedEnrolledCourses] = React.useState([]);
   console.log("Backend URL:", backendUrl);
 
   // Function to get completed lectures from localStorage
@@ -151,6 +154,15 @@ const MyEnrollments = () => {
 
       console.log("Final progress array:", tempProgressArray);
       setProgressArray(tempProgressArray);
+      
+      // Build progress map with courseId as key
+      const tempProgressMap = {};
+      fullEnrolledCourses.forEach((course, index) => {
+        if (tempProgressArray[index]) {
+          tempProgressMap[course._id] = tempProgressArray[index];
+        }
+      });
+      setProgressMap(tempProgressMap);
     } catch (error) {
       console.error("Error in getCourseProgress:", error);
       if (error.response) {
@@ -168,6 +180,93 @@ const MyEnrollments = () => {
           "Failed to fetch course progress"
       );
     }
+  };
+
+  // Function to fetch enrollment dates and sort courses by latest enrollment
+  const sortCoursesByEnrollmentDate = useCallback(async () => {
+    try {
+      if (!fullEnrolledCourses || fullEnrolledCourses.length === 0) {
+        setSortedEnrolledCourses([]);
+        return;
+      }
+
+      const token = await getToken();
+      if (!token) {
+        setSortedEnrolledCourses(fullEnrolledCourses);
+        return;
+      }
+
+      // Fetch all user purchases to get enrollment dates
+      const { data } = await axios.get(`${backendUrl}/api/user/purchases`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (data.success && data.purchases) {
+        // Create a map of courseId to enrollment date (paymentDate for completed purchases)
+        const enrollmentDates = {};
+        
+        data.purchases
+          .filter(purchase => purchase.status === 'completed' && purchase.courseId)
+          .forEach(purchase => {
+            const courseId = typeof purchase.courseId === 'string' 
+              ? purchase.courseId 
+              : purchase.courseId._id || purchase.courseId.toString();
+            
+            // Use paymentDate (when enrollment actually happened) or fallback to purchaseDate
+            const enrollmentDate = purchase.paymentDate || purchase.purchaseDate;
+            
+            if (enrollmentDate && (!enrollmentDates[courseId] || new Date(enrollmentDate) > new Date(enrollmentDates[courseId]))) {
+              enrollmentDates[courseId] = enrollmentDate;
+            }
+          });
+
+        // Sort courses by enrollment date (latest first)
+        const sorted = [...fullEnrolledCourses].sort((a, b) => {
+          const dateA = enrollmentDates[a._id] ? new Date(enrollmentDates[a._id]) : new Date(0);
+          const dateB = enrollmentDates[b._id] ? new Date(enrollmentDates[b._id]) : new Date(0);
+          return dateB - dateA; // Latest first
+        });
+
+        console.log("📅 Courses sorted by enrollment date:", {
+          total: sorted.length,
+          enrollmentDates: Object.keys(enrollmentDates).length
+        });
+
+        setSortedEnrolledCourses(sorted);
+      } else {
+        // Fallback to original order if no purchase data
+        setSortedEnrolledCourses(fullEnrolledCourses);
+      }
+    } catch (error) {
+      console.error("Error sorting courses by enrollment date:", error);
+      // Fallback to original order on error
+      setSortedEnrolledCourses(fullEnrolledCourses);
+    }
+  }, [fullEnrolledCourses, getToken, backendUrl, setSortedEnrolledCourses]);
+
+  // Helper functions to get course-specific progress data
+  const getCourseProgressData = (courseId) => {
+    return progressMap[courseId] || {
+      totalLectures: 0,
+      lectureCompleted: 0,
+      progress: 0,
+      isCompleted: false,
+      completedLectureIds: []
+    };
+  };
+
+  const getCourseCompletionPercentage = (courseId) => {
+    const courseProgress = getCourseProgressData(courseId);
+    return courseProgress.progress || 0;
+  };
+
+  const getCourseStatusByCourseId = (courseId) => {
+    const completionPercentage = getCourseCompletionPercentage(courseId);
+    if (completionPercentage === 100)
+      return { text: "Completed", color: "bg-green-100 text-green-700" };
+    if (completionPercentage > 0)
+      return { text: "In Progress", color: "bg-yellow-100 text-yellow-700" };
+    return { text: "Not Started", color: "bg-gray-100 text-gray-700" };
   };
 
   console.log("Progress Array:", progressArray);
@@ -242,6 +341,11 @@ const MyEnrollments = () => {
     }
   }, [userData, fullEnrolledCourses]);
 
+  // Sort courses by enrollment date when fullEnrolledCourses changes
+  useEffect(() => {
+    sortCoursesByEnrollmentDate();
+  }, [fullEnrolledCourses, sortCoursesByEnrollmentDate]);
+
   // Listen for localStorage changes
   useEffect(() => {
     const handleStorageChange = (e) => {
@@ -267,33 +371,6 @@ const MyEnrollments = () => {
     }
   }, [fullEnrolledCourses]);
 
-  // Helper to get completion percentage based on dynamic data
-  const getCompletionPercentage = (course, index) => {
-    if (!progressArray[index]) return 0;
-
-    // Get completed lectures from both localStorage and progress array
-    const localCompleted = getLocalProgress(course._id);
-    const serverCompleted = progressArray[index].completedLectureIds || [];
-
-    // Combine and deduplicate completed lectures
-    const allCompleted = new Set([...localCompleted, ...serverCompleted]);
-
-    // Get total lectures
-    const totalLectures = getTotalLectures(course);
-
-    if (totalLectures === 0) return 0;
-    return Math.round((allCompleted.size / totalLectures) * 100);
-  };
-
-  // Helper to get status based on completion percentage
-  const getCourseStatus = (completionPercentage) => {
-    if (completionPercentage === 100)
-      return { text: "Completed", color: "bg-green-100 text-green-700" };
-    if (completionPercentage > 0)
-      return { text: "In Progress", color: "bg-yellow-100 text-yellow-700" };
-    return { text: "Not Started", color: "bg-gray-100 text-gray-700" };
-  };
-
   return (
     <div className="pb-20 md:pb-0">
       {" "}
@@ -312,16 +389,13 @@ const MyEnrollments = () => {
 
           {/* Mobile Card View (visible on small screens) */}
           <div className="block md:hidden space-y-3 sm:space-y-4">
-            {fullEnrolledCourses && fullEnrolledCourses.length > 0 ? (
-              fullEnrolledCourses.map((course, idx) => {
-                const totalLectures = progressArray[idx]?.totalLectures || 0;
-                const completedLectures =
-                  progressArray[idx]?.lectureCompleted || 0;
-                const completionPercentage = getCompletionPercentage(
-                  course,
-                  idx
-                );
-                const courseStatus = getCourseStatus(completionPercentage);
+            {sortedEnrolledCourses && sortedEnrolledCourses.length > 0 ? (
+              sortedEnrolledCourses.map((course) => {
+                const courseProgressData = getCourseProgressData(course._id);
+                const totalLectures = courseProgressData.totalLectures || 0;
+                const completedLectures = courseProgressData.lectureCompleted || 0;
+                const completionPercentage = getCourseCompletionPercentage(course._id);
+                const courseStatus = getCourseStatusByCourseId(course._id);
 
                 return (
                   <div
@@ -454,12 +528,12 @@ const MyEnrollments = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {fullEnrolledCourses && fullEnrolledCourses.length > 0 ? (
-                    fullEnrolledCourses.map((course, idx) => {
-                      // Get completed lectures from both sources
+                  {sortedEnrolledCourses && sortedEnrolledCourses.length > 0 ? (
+                    sortedEnrolledCourses.map((course) => {
+                      // Get progress data for this specific course
+                      const courseProgressData = getCourseProgressData(course._id);
                       const localCompleted = getLocalProgress(course._id);
-                      const serverCompleted =
-                        progressArray[idx]?.completedLectureIds || [];
+                      const serverCompleted = courseProgressData.completedLectureIds || [];
                       const allCompleted = new Set([
                         ...localCompleted,
                         ...serverCompleted,
@@ -467,12 +541,8 @@ const MyEnrollments = () => {
 
                       const totalLectures = getTotalLectures(course);
                       const completedLectures = allCompleted.size;
-                      const completionPercentage = getCompletionPercentage(
-                        course,
-                        idx
-                      );
-                      const courseStatus =
-                        getCourseStatus(completionPercentage);
+                      const completionPercentage = getCourseCompletionPercentage(course._id);
+                      const courseStatus = getCourseStatusByCourseId(course._id);
 
                       return (
                         <tr
